@@ -8,6 +8,13 @@
       "thumb": "/specimens/42ac05-g1/tissue.png"
     },
     {
+      "id": "6a5efd",
+      "name": "Specimen 6A5E",
+      "createdAt": "2026-09-26T17:15:47.043Z",
+      "generation": 0,
+      "thumb": "/specimens/6a5efd/tissue.png"
+    },
+    {
       "id": "42ac05",
       "name": "Specimen 42AC",
       "createdAt": "2026-09-26T17:12:27.287Z",

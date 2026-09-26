@@ -72,12 +72,8 @@ export function evolve() {
   const wounds = pendingWounds.slice();
   void exclusive(
     "evolve",
-    async (signal) => {
-      const next = await evolveSpecimen(specimen, wounds, controls, { signal });
-      // Consume only the wounds this pass painted; touches made while it ran wait for the next evolve.
-      useChrono.setState((s) => ({ pendingWounds: s.pendingWounds.filter((w) => !wounds.includes(w)) }));
-      return next;
-    },
+    // The controller consumes exactly these wounds on success; touches made meanwhile stay pending.
+    (signal) => evolveSpecimen(specimen, wounds, controls, { signal }),
     evolve,
   );
 }
