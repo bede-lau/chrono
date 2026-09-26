@@ -133,7 +133,7 @@ export default function OrganismLab() {
     <main style={{ position: "fixed", inset: 0, background: "#050506", color: "rgba(255,255,255,0.9)" }}>
       <Organism onWound={setLastWound} />
 
-      <div style={{ position: "absolute", left: 20, bottom: 18, font: "11px/1.5 var(--font-geist-mono), ui-monospace, monospace", color: "rgba(255,255,255,0.4)", pointerEvents: "none" }}>
+      <div style={{ position: "absolute", left: 84, bottom: 26, font: "11px/1.5 var(--font-geist-mono), ui-monospace, monospace", color: "rgba(255,255,255,0.4)", pointerEvents: "none" }}>
         {fps} fps · stage {stage} {LAB_STAGES[stage]} · wounds {pending} · audio {audioLevel.toFixed(2)}
         {lastWound && ` · last wound u ${lastWound.u.toFixed(3)} v ${lastWound.v.toFixed(3)}`}
       </div>

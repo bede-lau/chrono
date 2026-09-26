@@ -3,21 +3,12 @@
  * UI actions over the chain controller: one run at a time, abortable, errors surfaced as toasts with Retry.
  */
 import { STAGES, type Specimen, type StageId } from "@/lib/chain/types";
-import * as real from "@/lib/chain/controller";
+import { evolveSpecimen, growSpecimen, loadArchive, loadSpecimen } from "@/lib/chain/controller";
 import { unlockAudioContext } from "@/lib/audio/player";
 import { useChrono } from "@/lib/store";
-import * as mock from "./_placeholders/controller";
 import { captureOrganismBlob, captureOrganismPng } from "./deps";
 import { isActive } from "./format";
 import { useUi } from "./uiStore";
-
-type Controller = Pick<typeof real, "growSpecimen" | "evolveSpecimen" | "loadArchive" | "loadSpecimen">;
-
-/** TEMPORARY: `?mock` drives the rail with the local mock chain (UI development without spending Atlas quota). */
-const mockRequested = () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("mock");
-async function controller(): Promise<Controller> {
-  return mockRequested() ? mock : real;
-}
 
 let abort: AbortController | null = null;
 
@@ -72,7 +63,7 @@ async function exclusive(kind: "grow" | "evolve", body: (signal: AbortSignal) =>
 export function newSpecimen() {
   const { controls } = useChrono.getState();
   useChrono.getState().selectStage(null);
-  void exclusive("grow", async (signal) => (await controller()).growSpecimen(controls, signal), newSpecimen);
+  void exclusive("grow", async (signal) => growSpecimen(controls, signal), newSpecimen);
 }
 
 export function evolve() {
@@ -82,7 +73,7 @@ export function evolve() {
   void exclusive(
     "evolve",
     async (signal) => {
-      const next = await (await controller()).evolveSpecimen(specimen, wounds, controls, { signal });
+      const next = await evolveSpecimen(specimen, wounds, controls, { signal });
       // Consume only the wounds this pass painted; touches made while it ran wait for the next evolve.
       useChrono.setState((s) => ({ pendingWounds: s.pendingWounds.filter((w) => !wounds.includes(w)) }));
       return next;
@@ -100,7 +91,7 @@ export async function openSpecimen(id: string) {
   const ui = useUi.getState();
   ui.setRunning("load");
   try {
-    const s = await (await controller()).loadSpecimen(id);
+    const s = await loadSpecimen(id);
     if (s && useChrono.getState().specimen?.id !== s.id) useChrono.getState().setSpecimen(s);
     useChrono.getState().clearWounds();
   } catch (e) {
@@ -121,7 +112,7 @@ export async function bootstrap() {
   if (booted) return;
   booted = true;
   try {
-    await (await controller()).loadArchive();
+    await loadArchive();
     if (!useChrono.getState().specimen) {
       const newest = [...useChrono.getState().archive].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
       if (newest) await openSpecimen(newest.id);

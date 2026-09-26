@@ -45,7 +45,7 @@ export function Hint({ compact = false }: { compact?: boolean }) {
 
   return (
     <AnimatePresence>
-      {show && (
+      {show && hasSpecimen && (
         <motion.div
           key="hint"
           role="status"

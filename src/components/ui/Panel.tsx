@@ -62,7 +62,7 @@ function PanelInner({ onClose, label, mobile, children, className }: { onClose: 
         className={cx(
           "pointer-events-auto fixed z-40 flex flex-col overflow-hidden glass-strong shadow-2xl shadow-black/60",
           mobile
-            ? "inset-x-0 bottom-0 max-h-[84dvh] rounded-t-[22px] border-b-0 pb-[var(--safe-bottom)]"
+            ? "inset-x-0 bottom-0 mx-auto max-h-[84dvh] max-w-[560px] rounded-t-[22px] border-b-0 pb-[var(--safe-bottom)]"
             : "top-[72px] right-5 bottom-[var(--rail-clearance)] w-[380px] rounded-[18px]",
           className,
         )}

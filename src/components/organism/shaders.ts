@@ -300,20 +300,22 @@ void main() {
   float lum = dot(tissue, vec3(0.2126, 0.7152, 0.0722));
   tissue = mix(vec3(lum), tissue, 0.86) * 0.92 + 0.012;
 
-  // ---- living cellular detail: soft domed cells, thin translucent membranes, tiny nuclei
+  // ---- living cellular detail: packed soft cells (bubble domes), faint translucent walls, tiny nuclei
   float cd = uCellDetail;
   float warp = snoise(d * 2.2 + uSeed * 0.21);
-  vec2 cw = cells(d * (8.0 + 1.8 * warp) + uSeed * 0.37, uTime * 0.22);
+  vec3 cp = d * (8.5 + 2.2 * warp) + uSeed * 0.37;
+  cp += 0.22 * vec3(snoise(cp * 0.9 + 3.1), snoise(cp * 0.9 + 7.7), snoise(cp * 0.9 + 1.3));
+  vec2 cw = cells(cp, uTime * 0.22);
   float edge = cw.y - cw.x;
-  float membrane = 1.0 - smoothstep(0.0, 0.11, edge);
-  float core = 1.0 - smoothstep(0.02, 0.12, cw.x);
+  float membrane = 1.0 - smoothstep(0.0, 0.09, edge);
+  float core = 1.0 - smoothstep(0.02, 0.11, cw.x);
   float fine = snoise(d * 34.0 + uSeed.zxy);
-  vec3 albedo = tissue * (0.88 + 0.24 * (0.5 + 0.5 * warp) * cd);
-  albedo *= 1.0 - 0.12 * membrane * cd;
-  albedo = mix(albedo, albedo * 1.3 + 0.015, core * 0.24 * cd);
+  vec3 albedo = tissue * (0.86 + 0.28 * (0.5 + 0.5 * warp) * cd);
+  albedo *= 1.0 - 0.1 * membrane * cd;
+  albedo = mix(albedo, albedo * 1.3 + 0.015, core * 0.22 * cd);
   albedo *= 1.0 + 0.05 * fine * cd;
-  float h = (smoothstep(0.0, 0.6, edge) * 0.5 - membrane * 0.1 + fine * 0.05) * cd;
-  N = perturbNormal(N, vViewPos, h, 0.003);
+  float h = ((1.0 - cw.x * cw.x) * 0.6 + fine * 0.04) * cd;
+  N = perturbNormal(N, vViewPos, h, 0.0026);
 
   // ---- wounds: bright flash -> travelling ring (entangled twin at the antipode) -> decoherence scar
   float glow = 0.0, scar = 0.0, ring = 0.0;

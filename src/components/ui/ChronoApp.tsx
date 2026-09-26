@@ -76,7 +76,7 @@ function MobileBar() {
   const togglePanel = useUi((s) => s.togglePanel);
   const open = useUi((s) => s.panel === "controls");
   return (
-    <div className="pointer-events-auto flex items-center gap-2 px-4 pt-2">
+    <div className="pointer-events-auto mx-auto flex max-w-[560px] items-center gap-2 px-4 pt-2">
       <button
         type="button"
         aria-label="Controls"

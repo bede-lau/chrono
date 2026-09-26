@@ -326,7 +326,7 @@ export class OrganismRig {
     t.reliefAmp = hasColony && this.reliefReady ? RELIEF_AMP : 0;
     t.irid = hasMembrane ? 1 : 0;
     t.cellDetail = hasSkin ? 1 : hasColony ? 0.55 : 0;
-    t.nucleiGlow = hasColony ? (hasSkin ? 0.1 : 0.55) : 0;
+    t.nucleiGlow = hasColony ? (hasSkin ? 0.16 : 0.55) : 0;
     t.nucleiPoints = hasColony ? (hasSkin ? 0 : 1) : 0;
     t.maturity = [hasGenome, hasColony, hasSkin, !!s?.tissue, hasSoma, hasMembrane, !!(s?.voice || s?.echo)].filter(Boolean).length / 7;
     if (!url) t.hasCol = 0;
