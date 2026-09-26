@@ -1,0 +1,9 @@
+{
+  "name": "chrono-deck-export",
+  "private": true,
+  "description": "Local, isolated tooling for exporting deck/chrono-deck.html to PDF + PNG previews. Not part of the main Chrono app build.",
+  "type": "module",
+  "dependencies": {
+    "playwright": "^1.55.0"
+  }
+}
