@@ -53,9 +53,9 @@ bash deck/export.sh                                                             
 | 9 | Integration QA on :3000 | orchestrator | ✅ | See "Verified integration QA" above. |
 | 10 | Deck (4 slides, B&W Apple style, daisy SVG diagrams) | slides | 🟡 redo in progress (user asked for more creative SVG diagrams/icons) | `deck/chrono-deck.html`, `deck/export.sh` → `deck/Chrono.pdf`; drop a render into `deck/assets/organism.png` and re-export |
 | 11 | Poster art (4:3 render) | orchestrator | ✅ | `docs/poster.png` (3200×2400) + `deck/assets/organism.png`; UI shots in `docs/screenshots/`. |
-| 12 | Submission answers | orchestrator | 🟡 draft | `docs/submission.md` — rewrite with real facts below (cut self-referential lines) |
-| 13 | Push to GitHub `bede-lau/chrono` | next agent | ⬜/🟡 | Local git repo committed. No git credentials here; GitHub connector is `gibbiechu` and can't push binaries → run `git remote add origin https://github.com/bede-lau/chrono.git && git push -u origin main` from a machine logged in as bede-lau (remote has a README-only initial commit: use `git pull --rebase origin main` first or force-push) |
-| 14 | Deploy | user/next agent | ⬜ | Needs a server runtime (Atlas CORS only allows localhost:3000 → proxy routes). Vercel: set `MOTH_API_KEY`, `MOTH_API_BASE` |
+| 12 | Submission answers | submission agent | ✅ | `docs/submission.md` — all 15 fields written from measured manifest data, plus an appendix table of specimen `308761`. Only field 9 (Demo URL) is still `TBD`, pending deploy. |
+| 13 | Push to GitHub `bede-lau/chrono` | orchestrator | ✅ | Pushed to `origin/main`. API key verified absent from every tracked file and from full history; only `.env.example` (placeholder) is committed. |
+| 14 | Deploy | **user** | ⬜ **only blocking item** | Production build + `next start` smoke-tested locally: page 200, archive 200, and the proxy submitted a real Atlas job (202 + job_id). Needs one interactive `npx vercel login`; commands in "Next steps" below. |
 | 15 | Demo video | user | ⬜ | |
 
 ## Live results (real Atlas jobs, all attempt 1)
