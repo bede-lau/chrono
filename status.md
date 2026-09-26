@@ -1,13 +1,31 @@
 # Chrono — Status & Handover (SOURCE OF TRUTH)
 
-**Last updated:** 2026-09-26 ~17:30 UTC by orchestrator. Session hit its usage limit mid-build; this is the handover snapshot.
+**Last updated:** 2026-09-26 ~17:40 UTC by orchestrator, after full integration QA.
 Read order for a new agent: this file → `docs/BRIEF.md` (spec, verified API facts, contracts, ownership) → `decisions.md` → `docs/PRD.md` → `AGENTS.md`.
 
 ## One-paragraph state
 Chrono is a quantum organism for Moth Hack 2026 · Challenge 06 Daisy Chain: 8 Moth Atlas engines chained, each consuming the previous output
 (Comet QRNG → Quantum Graph → Tessa → Quantum Blur → Blur Core → Entanglement Shader → QRC Audio → Retrocausal Echo).
-**The live chain works end-to-end against the real API**: 3 specimens are grown and saved in `public/specimens/` (`3fd5b1`, `42ac05`, and evolved `42ac05-g1` with 4 wounds).
-All modules exist; the remaining work is **integration QA of the full app on :3000, the deck re-export, poster art, final submission text, push, and deploy**.
+**The app is feature-complete and verified end-to-end.** 5 specimens are grown and committed in `public/specimens/`.
+Integration QA passed on 2026-09-26: `npm run build` succeeds (API routes server-rendered); the app loads the newest archived specimen instantly;
+the chain rail, inspector (with live coupling derivations), archive drawer, telemetry and mobile layout all work; the browser console is free of errors;
+and **a live Evolve driven from the browser UI ran the real chain through the `/api/moth/*` proxy — 33 API calls, all 2xx, zero errors, 72 s, specimen advanced Gen 1 → Gen 2.**
+Remaining: deck re-export (agent in flight), final submission text (agent in flight), push, deploy, demo video.
+
+## Verified integration QA (2026-09-26)
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | clean |
+| `npx next build` | succeeds; `/` + `/lab/*` static, `/api/moth/*` dynamic |
+| App boot on :3000 | loads newest archived specimen immediately, WebGL organism renders |
+| Chain rail | all 8 stages with per-stage status + latency |
+| Inspector | engine id, consumes→produces, R/T LUT heatmaps, GLSL, params, and the coupling note (e.g. `absorption 0.91 ← entropy 7.28 bits · layers 2 ← soma σ 0.148`) |
+| Archive drawer | lists all 5 specimens, marks the one on screen |
+| Wound click → Evolve | real chain through the proxy: blur-v1 → blur-core-v1 → entanglement-shader-v1 → qrc-audio-v1 → retrocausal-echo-v1, 72 s, Gen 1 → Gen 2, organism visibly changed, entropy delta shown |
+| Browser console | no errors / no failed requests (only dev-only HMR + expected pre-gesture AudioContext warnings) |
+| Mobile 390×844 | compact bar, scrollable rail, Evolve pinned, no horizontal scroll |
+QA harness (not committed): Playwright scripts in the session scratchpad drove a headless Chromium against :3000.
+Screenshots committed to `docs/screenshots/`; poster to `docs/poster.png` and `deck/assets/organism.png`.
 
 ## How to run
 ```bash
@@ -27,14 +45,14 @@ bash deck/export.sh                                                             
 | 1 | Scaffold + contracts | orchestrator | ✅ | Next 16.3, `src/lib/chain/types.ts`, `src/lib/store.ts` (additive-only contracts) |
 | 2 | Moth transport + proxy routes | pipeline | ✅ | `src/lib/moth/*`, `src/app/api/moth/*` (assets, engines/[id]/process, jobs/[id]/status+result, assets/[id]/download) |
 | 3 | Chain controller + stages | pipeline | ✅ (live-verified) | `src/lib/chain/pipeline.ts`, `controller.ts`, `util.ts`; notes record real derived numbers |
-| 4 | Grow script + real specimens | pipeline | ✅ 3 done, 🟡 `308761` was mid-run (partial manifest — delete dir or re-run) | `scripts/grow.ts`, `public/specimens/index.json` |
+| 4 | Grow script + real specimens | pipeline | ✅ 5 specimens | `scripts/grow.ts` → `public/specimens/`: `3fd5b1`, `42ac05`, `42ac05-g1` (evolved, 4 wounds), `308761` (Tessa on `fake_fez`), `6a5efd`. |
 | 5 | Imaging | imaging | ✅ | `src/lib/imaging/*` (PNG, colony seed, wound mask, metrics, HDR LUT, shader zip) |
 | 6 | Audio | audio | ✅ | `src/lib/audio/*`, `src/components/audio/*` (toggle, spectrum, waveform, `useAudioEngine`). Move `src/lib/audio/verify.ts` → `scripts/` |
-| 7 | 3D viewport | viewport | 🟡 agent was still iterating on visuals | `src/components/organism/*`, sandbox `/lab/organism`. Verify fps, LUT iridescence, antipodal coupling, click→wound |
-| 8 | UI shell | ui | 🟡 agent was still working | `src/components/ui/*`, `src/hooks/*`, `src/app/page.tsx`. **Remove `src/components/ui/_placeholders/`** and point `deps.tsx` at the real Organism/audio/controller |
-| 9 | Integration QA on :3000 | next agent | ⬜ | `npx tsc --noEmit`, `npm run build`, open app: archive loads instantly, rail/inspector show job ids + notes, Evolve re-runs 3→7, audio plays, mobile layout |
+| 7 | 3D viewport | viewport | ✅ | `src/components/organism/*`, sandbox `/lab/organism`. LUT iridescence, antipodal displacement and click→wound verified in-browser. |
+| 8 | UI shell | ui | ✅ | `src/components/ui/*`, `src/hooks/*`, `src/app/page.tsx`. Placeholders removed; wired to the real Organism / audio / controller. |
+| 9 | Integration QA on :3000 | orchestrator | ✅ | See "Verified integration QA" above. |
 | 10 | Deck (4 slides, B&W Apple style, daisy SVG diagrams) | slides | 🟡 redo in progress (user asked for more creative SVG diagrams/icons) | `deck/chrono-deck.html`, `deck/export.sh` → `deck/Chrono.pdf`; drop a render into `deck/assets/organism.png` and re-export |
-| 11 | Poster art (4:3 render) | next agent | ⬜ | Capture from the app (Capture button / `captureOrganismPng`) → `deck/assets/organism.png` + `docs/poster.png` |
+| 11 | Poster art (4:3 render) | orchestrator | ✅ | `docs/poster.png` (3200×2400) + `deck/assets/organism.png`; UI shots in `docs/screenshots/`. |
 | 12 | Submission answers | orchestrator | 🟡 draft | `docs/submission.md` — rewrite with real facts below (cut self-referential lines) |
 | 13 | Push to GitHub `bede-lau/chrono` | next agent | ⬜/🟡 | Local git repo committed. No git credentials here; GitHub connector is `gibbiechu` and can't push binaries → run `git remote add origin https://github.com/bede-lau/chrono.git && git push -u origin main` from a machine logged in as bede-lau (remote has a README-only initial commit: use `git pull --rebase origin main` first or force-push) |
 | 14 | Deploy | user/next agent | ⬜ | Needs a server runtime (Atlas CORS only allows localhost:3000 → proxy routes). Vercel: set `MOTH_API_KEY`, `MOTH_API_BASE` |
@@ -63,6 +81,26 @@ Job ids + coupling notes are in each `public/specimens/<id>/manifest.json` → `
 - `/ultrareview` is user-triggered: the user runs `/code-review ultra` themselves.
 
 ## Next steps (in order)
-1. `git status`; finish #7/#8 wiring (remove UI placeholders), `npx tsc --noEmit`, `npm run build`, QA on :3000 (desktop + mobile).
-2. Delete or finish `public/specimens/308761` (partial). Optionally grow 1–2 more (one `fake_fez`).
-3. Capture poster → re-export deck → finalise `docs/submission.md` → push → deploy.
+1. **Deploy** (only blocking item for the Demo URL field). Needs a server runtime — the app cannot be a static export,
+   because the browser reaches Atlas through `/api/moth/*` (Atlas CORS allows only `http://localhost:3000`).
+   ```bash
+   npx vercel login          # interactive — a human must do this once
+   npx vercel link
+   npx vercel env add MOTH_API_KEY production      # paste the moth_ key
+   npx vercel env add MOTH_API_BASE production     # https://api.mothquantum.com/api/v1
+   npx vercel --prod
+   ```
+   Then put the resulting URL into `docs/submission.md` field 9 and re-check the app loads a specimen from the archive.
+2. Paste `docs/submission.md` into the Airtable form; upload `docs/poster.png` (poster art),
+   `docs/screenshots/*` (additional images) and `deck/Chrono.pdf` (presentation slides).
+3. Record the demo video (the only genuinely manual piece): load app → touch the organism a few times →
+   Evolve → watch the rail run the 5 downstream engines → open the inspector on Membrane to show the coupling note →
+   enable audio. ~72 s of real chain time makes a good real-time take.
+
+## If you are a coding agent taking over
+- Contracts (`src/lib/chain/types.ts`, `src/lib/store.ts`) are additive-only.
+- Don't run a second dev server on :3000; use `NEXT_DIST_DIR=.next-x npx next dev -p 31xx`.
+- `next dev`/`next build` rewrite `tsconfig.json`'s `include`; `git checkout -- tsconfig.json` before committing.
+- The Moth key lives only in `.env.local` (gitignored); `.env.example` documents the shape.
+- To see the app without a browser extension, drive headless Chromium via `deck/node_modules/playwright`
+  (that is how the QA above was done).
