@@ -47,7 +47,7 @@ bash deck/export.sh                                                             
 | 3 | Chain controller + stages | pipeline | ✅ (live-verified) | `src/lib/chain/pipeline.ts`, `controller.ts`, `util.ts`; notes record real derived numbers |
 | 4 | Grow script + real specimens | pipeline | ✅ 5 specimens | `scripts/grow.ts` → `public/specimens/`: `3fd5b1`, `42ac05`, `42ac05-g1` (evolved, 4 wounds), `308761` (Tessa on `fake_fez`), `6a5efd`. |
 | 5 | Imaging | imaging | ✅ | `src/lib/imaging/*` (PNG, colony seed, wound mask, metrics, HDR LUT, shader zip) |
-| 6 | Audio | audio | ✅ | `src/lib/audio/*`, `src/components/audio/*` (toggle, spectrum, waveform, `useAudioEngine`). Move `src/lib/audio/verify.ts` → `scripts/` |
+| 6 | Audio | audio | ✅ | `src/lib/audio/*`, `src/components/audio/*` (toggle, spectrum, waveform, `useAudioEngine`). |
 | 7 | 3D viewport | viewport | ✅ | `src/components/organism/*`, sandbox `/lab/organism`. LUT iridescence, antipodal displacement and click→wound verified in-browser. |
 | 8 | UI shell | ui | ✅ | `src/components/ui/*`, `src/hooks/*`, `src/app/page.tsx`. Placeholders removed; wired to the real Organism / audio / controller. |
 | 9 | Integration QA on :3000 | orchestrator | ✅ | See "Verified integration QA" above. |

@@ -13,10 +13,10 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unzipSync } from "fflate";
-import type { GenomeArtifact, MembraneArtifact, SomaArtifact } from "../chain/types";
-import { decodeWav } from "./wav";
-import { synthesizeVocabulary } from "./synth";
-import { zipChunks } from "./zip";
+import type { GenomeArtifact, MembraneArtifact, SomaArtifact } from "../src/lib/chain/types";
+import { decodeWav } from "../src/lib/audio/wav";
+import { synthesizeVocabulary } from "../src/lib/audio/synth";
+import { zipChunks } from "../src/lib/audio/zip";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -97,7 +97,7 @@ function decodeHdrRedChannel(bytes: Uint8Array): { width: number; height: number
 }
 
 function loadMembraneFromFixture(): MembraneArtifact {
-  const zipPath = resolve(__dirname, "../../../docs/moth/fixtures/shader.zip");
+  const zipPath = resolve(__dirname, "../docs/moth/fixtures/shader.zip");
   const zipBytes = new Uint8Array(readFileSync(zipPath));
   const files = unzipSync(zipBytes);
   const rHdr = files["R_lut.hdr"];
