@@ -6,11 +6,12 @@
  */
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { decodePng } from "../src/lib/imaging";
 import { parseWav } from "../src/lib/chain/util";
 import { STAGES, type ArchiveIndex, type Specimen } from "../src/lib/chain/types";
 
-const PUBLIC = path.resolve(__dirname, "..", "public");
+const PUBLIC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 const problems: string[] = [];
 const fail = (id: string, msg: string) => problems.push(`${id}: ${msg}`);
 

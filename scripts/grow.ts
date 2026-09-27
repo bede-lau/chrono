@@ -10,11 +10,12 @@
  */
 import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createServerTransport } from "../src/lib/moth/server";
 import { ChainHaltedError, evolveChain, growChain, resumeChain, type ArtifactSink, type ChainReporter } from "../src/lib/chain/pipeline";
 import { DEFAULT_CONTROLS, type ArchiveIndex, type Controls, type Specimen, type StageId, type Wound } from "../src/lib/chain/types";
 
-const ROOT = path.resolve(__dirname, "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "public");
 const SPECIMENS = path.join(PUBLIC, "specimens");
 

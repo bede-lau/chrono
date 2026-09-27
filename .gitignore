@@ -15,7 +15,11 @@ node_modules
 
 # next.js
 /.next/
+/.vinext/
 /out/
+/dist/
+/.wrangler/
+/.sites-runtime/
 
 # production
 /build

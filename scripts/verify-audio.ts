@@ -18,7 +18,7 @@ import { decodeWav } from "../src/lib/audio/wav";
 import { synthesizeVocabulary } from "../src/lib/audio/synth";
 import { zipChunks } from "../src/lib/audio/zip";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const scriptDir = dirname(fileURLToPath(import.meta.url));
 
 // --- minimal Radiance RGBE (.hdr) decoder: new-style RLE scanlines + flat fallback ------------
 
@@ -97,7 +97,7 @@ function decodeHdrRedChannel(bytes: Uint8Array): { width: number; height: number
 }
 
 function loadMembraneFromFixture(): MembraneArtifact {
-  const zipPath = resolve(__dirname, "../docs/moth/fixtures/shader.zip");
+  const zipPath = resolve(scriptDir, "../docs/moth/fixtures/shader.zip");
   const zipBytes = new Uint8Array(readFileSync(zipPath));
   const files = unzipSync(zipBytes);
   const rHdr = files["R_lut.hdr"];
