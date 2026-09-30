@@ -438,7 +438,10 @@ void main() {
     float pit = smoothstep(0.3, 0.72, snoise(d * 24.0 + uSeed.zxy)) * clamp(wear - 0.45, 0.0, 1.0);
     aged *= 1.0 - 0.6 * cr - 0.3 * pit;
     // scars: pale fibrous centre, dark rim where the wound mask rises
-    float rimS = exp(-pow((mw - 0.4) / 0.15, 2.0));
+    // GLSL pow is undefined for negative bases, even with exponent 2.0.
+    // Baseline/unwounded mask values lie below 0.4: square by multiplication.
+    float rimArg = (mw - 0.4) / 0.15;
+    float rimS = exp(-(rimArg * rimArg));
     float coreS = smoothstep(0.55, 0.95, mw);
     aged = mix(aged, vec3(lumT * 0.45 + 0.22) * vec3(1.0, 0.9, 0.86), coreS * 0.7 * min(uAge, 1.2));
     aged *= 1.0 - 0.62 * rimS * min(uAge, 1.3);
@@ -816,7 +819,8 @@ varying float vEnd;
 void main() {
   vec2 c = gl_PointCoord - 0.5;
   float r = length(c) * 2.0;
-  float ring = exp(-pow((r - 0.62) * 9.0, 2.0));
+  float ringArg = (r - 0.62) * 9.0;
+  float ring = exp(-(ringArg * ringArg));
   float dot_ = exp(-r * r * 22.0);
   float a = (ring * 0.9 + dot_) * vA;
   if (a < 0.003) discard;
@@ -868,7 +872,9 @@ varying float vDark;
 varying vec3 vN;
 varying vec3 vV;
 void main() {
-  float ndv = abs(dot(normalize(vN), normalize(vV)));
+  // Normalized dot products can round slightly past 1 on the GPU.
+  // A negative Fresnel base makes the fractional power invalid and poisons bloom.
+  float ndv = clamp(abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0);
   float rim = pow(1.0 - ndv, 2.2);
   float line = pow(1.0 - ndv, 8.0);
   float a = vA * (0.04 + 0.5 * rim + uShellOv * 0.9 * line);
