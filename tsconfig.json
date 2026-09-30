@@ -34,15 +34,10 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts",
-    ".next-ui/types/**/*.ts",
-    ".next-ui/dev/types/**/*.ts",
-    ".next-pipeline/types/**/*.ts",
-    ".next-pipeline/dev/types/**/*.ts",
-    ".next-viewport/types/**/*.ts",
-    ".next-viewport/dev/types/**/*.ts"
+    "**/*.mts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "vite.config.ts"
   ]
 }
