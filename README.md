@@ -4,6 +4,8 @@ A living, evolving quantum organism in the browser, computed across **8 Moth Atl
 
 **Live demo:** [chrono.bedelau59.chatgpt.site](https://chrono.bedelau59.chatgpt.site)
 
+**Visual identity:** [Logo assets, icon exports and metadata](docs/BRAND.md). Regenerate the brand exports with `node scripts/generate-brand.mjs`; verify the built site's branding with `node scripts/qa/brand.mjs http://localhost:3103`.
+
 ---
 
 ## The 8-Engine Chain

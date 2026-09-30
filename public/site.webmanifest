@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "Chrono — A living quantum organism",
+  "short_name": "Chrono",
+  "description": "Create, touch and evolve a living quantum organism powered by eight linked Moth Atlas engines.",
+  "lang": "en-GB",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#050506",
+  "theme_color": "#050506",
+  "categories": ["entertainment", "education"],
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /lab/
+
+Sitemap: https://chrono.bedelau59.chatgpt.site/sitemap.xml

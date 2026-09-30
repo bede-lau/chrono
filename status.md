@@ -1,6 +1,6 @@
 # Chrono — Status & Handover (SOURCE OF TRUTH)
 
-**Last updated:** 2026-09-30, Round 2 completion pass.
+**Last updated:** 2026-09-30, visual identity and metadata completion.
 Read order: this file → `docs/BRIEF.md` → `decisions.md` → `docs/PRD.md` → `AGENTS.md`. Round 2 requirements are in `docs/ROUND2.md`; verification details are in `docs/ROUND2-QA.md`.
 
 ## ROUND 2: COMPLETE
@@ -27,6 +27,14 @@ The completion pass used Luna for mask/docs and bounded lint/audio work, Sol for
 Chrono chains eight Moth Atlas engines: QRNG → Graph → Tessa → Blur → Blur Core → Entanglement Shader → QRC Audio → Retrocausal Echo. Visitors explicitly Create or choose an archived specimen. Touches queue wounds; Evolve runs the five downstream stages. One panel explains inputs, engines, artifact provenance and their effects on the organism. The archive contains five specimens, including the regenerated `42ac05-g1`.
 
 Headless screenshots use software WebGL and do not establish a GPU frame-rate benchmark. Engine latency remains variable. Submission form upload and a narrated competition video are separate from this code release.
+
+## Visual identity and metadata: complete
+
+- ✅ Original monochrome phase C mark, redrawn as editable SVG after built-in image generation concept exploration. White/dark lockups and transparent PNGs are in `public/brand/`; the live header uses the mark beside the Geist wordmark.
+- ✅ Replaced the default favicon with 16/32/48px ICO frames; SVG/PNG browser icons, 180px Apple icon, 192/512px app icons and a separate maskable icon.
+- ✅ 1200×630 social card featuring a real Chrono specimen. Canonical URL, description, Open Graph, Twitter, image alt text, Apple settings, manifest, theme colour, robots and sitemap configured. Labs explicitly noindex.
+- ✅ Next build, Worker build, lint and TypeScript pass. `scripts/qa/brand.mjs` verifies served assets, icon dimensions, ICO frames, social metadata and desktop/360px layout against the built Worker with no engine calls. Lab noindex also verified in server HTML.
+- Design rationale, exports and the generation prompt: `docs/BRAND.md`. Rebuild exports with `node scripts/generate-brand.mjs`. No packages added; no Atlas credits spent for branding checks.
 
 ## Historical verification
 

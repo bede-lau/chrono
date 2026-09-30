@@ -22,7 +22,12 @@ export function TopBar({ compact = false }: { compact?: boolean }) {
       )}
     >
       <div className={cx("pointer-events-auto flex min-w-0 items-start", compact ? "gap-3" : "gap-4")}>
-        <h1 className="shrink-0 text-[15px] font-semibold leading-[18px] tracking-[-0.02em] text-fg-1">Chrono</h1>
+        <h1 className="flex shrink-0 items-center gap-2 text-[15px] font-semibold leading-[18px] tracking-[-0.02em] text-fg-1">
+          {/* The name supplies the accessible label; the adjacent mark is decorative. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/chrono-mark.svg" width="20" height="20" alt="" aria-hidden="true" />
+          Chrono
+        </h1>
         <span role="presentation" className="mt-[2px] h-[14px] w-px shrink-0 bg-white/12" />
         <SpecimenIdentity compact={compact} />
       </div>
