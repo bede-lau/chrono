@@ -12,7 +12,7 @@ import { useUi } from "./uiStore";
 
 /* ---------------------------------------------------------------- slider */
 
-function Slider({
+export function Slider({
   label,
   value,
   min,
