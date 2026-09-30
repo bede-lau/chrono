@@ -19,8 +19,10 @@ echo "PDF:  $PDF_FILE"
 
 pdf_ok=false
 
-# ---- 1. Try Dia (Chromium-based) headless print-to-pdf ----
-if [ -x "$DIA_BIN" ]; then
+# ---- 1. Optional: Dia headless print-to-pdf (opt-in with USE_DIA=1) ----
+# Off by default: when Dia is already running, headless Dia hands off to the
+# running instance and never exits, which hangs the export.
+if [ "${USE_DIA:-0}" = "1" ] && [ -x "$DIA_BIN" ]; then
   echo "-- Trying Dia headless print-to-pdf --"
   rm -f "$PDF_FILE"
   set +e
@@ -37,7 +39,7 @@ if [ -x "$DIA_BIN" ]; then
     echo "Dia headless print-to-pdf failed or produced an empty file (exit $dia_status)."
   fi
 else
-  echo "Dia not found at $DIA_BIN, skipping."
+  echo "Skipping Dia (set USE_DIA=1 to try it); using Playwright chromium."
 fi
 
 # ---- 2. Fallback: Playwright chromium ----

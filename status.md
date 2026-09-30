@@ -1,6 +1,6 @@
 # Chrono — Status & Handover (SOURCE OF TRUTH)
 
-**Last updated:** 2026-09-26 ~17:40 UTC by orchestrator, after full integration QA.
+**Last updated:** 2026-09-30 by orchestrator: deck finished, hosting setup re-verified, docs synced.
 Read order for a new agent: this file → `docs/BRIEF.md` (spec, verified API facts, contracts, ownership) → `decisions.md` → `docs/PRD.md` → `AGENTS.md`.
 
 ## One-paragraph state
@@ -10,7 +10,7 @@ Chrono is a quantum organism for Moth Hack 2026 · Challenge 06 Daisy Chain: 8 M
 Integration QA passed on 2026-09-26: `npm run build` succeeds (API routes server-rendered); the app loads the newest archived specimen instantly;
 the chain rail, inspector (with live coupling derivations), archive drawer, telemetry and mobile layout all work; the browser console is free of errors;
 and **a live Evolve driven from the browser UI ran the real chain through the `/api/moth/*` proxy — 33 API calls, all 2xx, zero errors, 72 s, specimen advanced Gen 1 → Gen 2.**
-Remaining: deck re-export (agent in flight), final submission text (agent in flight), push, deploy, demo video.
+Remaining (all need you): the deployed Demo URL for the form (field 9), pasting the form answers + uploading the poster/screenshots/PDF, and the demo video.
 
 ## Verified integration QA (2026-09-26)
 | Check | Result |
@@ -26,6 +26,19 @@ Remaining: deck re-export (agent in flight), final submission text (agent in fli
 | Mobile 390×844 | compact bar, scrollable rail, Evolve pinned, no horizontal scroll |
 QA harness (not committed): Playwright scripts in the session scratchpad drove a headless Chromium against :3000.
 Screenshots committed to `docs/screenshots/`; poster to `docs/poster.png` and `deck/assets/organism.png`.
+
+## Re-verified 2026-09-30 (after the hosting setup was added to the repo)
+Commit `548fc03 "Update Site source"` was made outside the build session: it adds `.openai/hosting.json`, `vite.config.ts`, `scripts/sites-vite-plugin.ts`,
+switches `npm run build` to `vinext build` (Next.js on Vite → Cloudflare Workers bundle) and keeps the old build as `npm run build:next`. Re-checked:
+| Check | Result |
+|---|---|
+| `npm run dev` (Next) | starts; `/` 200, `/specimens/index.json` 200, `POST /api/moth/engines/blur-core-v1/process` 202 with a real Atlas job id |
+| App in headless Chromium | WebGL canvas renders, all 8 stages listed, 0 console errors |
+| `npm run build` (vinext) | succeeds; all 5 `/api/moth/*` routes emitted |
+| `npm run build:next` | succeeds |
+| `npx tsc --noEmit` | clean after `npx next typegen` (Next 16 generates the global `LayoutProps` types; a fresh checkout needs it once) |
+Not verified by me: a *running* Cloudflare Worker (only that the bundle builds). `tsconfig.json` was cleaned: removed leftover `.next-ui/-pipeline/-viewport` include lines and excluded `vite.config.ts`
+(it destructures `d1`/`r2`, which the generated `hosting.json` doesn't declare, so it fails `tsc`).
 
 ## How to run
 ```bash
@@ -51,11 +64,11 @@ bash deck/export.sh                                                             
 | 7 | 3D viewport | viewport | ✅ | `src/components/organism/*`, sandbox `/lab/organism`. LUT iridescence, antipodal displacement and click→wound verified in-browser. |
 | 8 | UI shell | ui | ✅ | `src/components/ui/*`, `src/hooks/*`, `src/app/page.tsx`. Placeholders removed; wired to the real Organism / audio / controller. |
 | 9 | Integration QA on :3000 | orchestrator | ✅ | See "Verified integration QA" above. |
-| 10 | Deck (4 slides, B&W Apple style, daisy SVG diagrams) | slides | 🟡 redo in progress (user asked for more creative SVG diagrams/icons) | `deck/chrono-deck.html`, `deck/export.sh` → `deck/Chrono.pdf`; drop a render into `deck/assets/organism.png` and re-export |
+| 10 | Deck (4 slides, B&W keynote style, daisy of 8 line-art engine icons) | slides | ✅ | `deck/Chrono.pdf` (4 pages, verified) from `deck/chrono-deck.html`. Re-export with `bash deck/export.sh` (Playwright by default; `USE_DIA=1` opts into headless Dia, which hangs if Dia is already open). The HTML is now hand-edited source; the script that first generated it was not kept. |
 | 11 | Poster art (4:3 render) | orchestrator | ✅ | `docs/poster.png` (3200×2400) + `deck/assets/organism.png`; UI shots in `docs/screenshots/`. |
 | 12 | Submission answers | submission agent | ✅ | `docs/submission.md` — all 15 fields written from measured manifest data, plus an appendix table of specimen `308761`. Only field 9 (Demo URL) is still `TBD`, pending deploy. |
 | 13 | Push to GitHub `bede-lau/chrono` | orchestrator | ✅ | Pushed to `origin/main`. API key verified absent from every tracked file and from full history; only `.env.example` (placeholder) is committed. |
-| 14 | Deploy | **user** | ⬜ **only blocking item** | Production build + `next start` smoke-tested locally: page 200, archive 200, and the proxy submitted a real Atlas job (202 + job_id). Needs one interactive `npx vercel login`; commands in "Next steps" below. |
+| 14 | Deploy | **user** | ⬜ **only blocking item** | Hosting config now exists in the repo (see re-verification above) but I do not know whether a deploy has run or its URL. Whichever host: set runtime secrets `MOTH_API_KEY` and `MOTH_API_BASE`; the app needs a server runtime (Atlas CORS allows only `http://localhost:3000`, hence the `/api/moth/*` proxy). Put the live URL in `docs/submission.md` field 9. |
 | 15 | Demo video | user | ⬜ | |
 
 ## Live results (real Atlas jobs, all attempt 1)
@@ -81,16 +94,10 @@ Job ids + coupling notes are in each `public/specimens/<id>/manifest.json` → `
 - `/ultrareview` is user-triggered: the user runs `/code-review ultra` themselves.
 
 ## Next steps (in order)
-1. **Deploy** (only blocking item for the Demo URL field). Needs a server runtime — the app cannot be a static export,
-   because the browser reaches Atlas through `/api/moth/*` (Atlas CORS allows only `http://localhost:3000`).
-   ```bash
-   npx vercel login          # interactive — a human must do this once
-   npx vercel link
-   npx vercel env add MOTH_API_KEY production      # paste the moth_ key
-   npx vercel env add MOTH_API_BASE production     # https://api.mothquantum.com/api/v1
-   npx vercel --prod
-   ```
-   Then put the resulting URL into `docs/submission.md` field 9 and re-check the app loads a specimen from the archive.
+1. **Get the Demo URL** (only blocker for that form field). Needs a server runtime; a static export cannot work (`/api/moth/*` proxy).
+   - If the Sites/Cloudflare hosting from commit `548fc03` was already deployed: open it, confirm a specimen loads and Evolve works, and confirm `MOTH_API_KEY` + `MOTH_API_BASE` are set as secrets there.
+   - Or Vercel: in the project settings set **Build Command = `npm run build:next`** (plain `npm run build` now produces a Cloudflare bundle, not `.next`), add the two env vars, then `npx vercel --prod` (needs one interactive `npx vercel login`). Untested by me.
+   Then paste the URL into `docs/submission.md` field 9.
 2. Paste `docs/submission.md` into the Airtable form; upload `docs/poster.png` (poster art),
    `docs/screenshots/*` (additional images) and `deck/Chrono.pdf` (presentation slides).
 3. Record the demo video (the only genuinely manual piece): load app → touch the organism a few times →

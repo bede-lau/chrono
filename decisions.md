@@ -127,3 +127,11 @@
 **Decision**: **Orchestrator (Opus)** coordinates + owns contracts. **Pipeline agent (Opus)** implements moth proxy + chain logic + lifecycle. **Imaging (Sonnet)** handles texture→PNG conversions. **Audio (Sonnet)** handles waveform analysis + playback. **Viewport (Opus)** renders 3D organism + particle effects. **UI (Opus)** shell + controls. **Slides (Sonnet)** deck. **Docs (Haiku)** this file + PRD + README + status.
 
 **Consequence**: Allows parallel sprints. Fixed contracts + BRIEF ensure coherence. Haiku docs agent keeps scope tight (no complex prose). Reduces time-to-demo.
+
+## D14: Hosting via vinext (Next.js on Vite) → Cloudflare Workers, added after the build session
+
+**Context**: Commit `548fc03` ("Update Site source") added a hosting setup outside the agent build: `.openai/hosting.json`, `vite.config.ts`, `scripts/sites-vite-plugin.ts`, and changed `npm run build` to `vinext build`. The standard build is kept as `npm run build:next`; `npm run dev` is still `next dev`.
+
+**Decision**: Keep it. Both builds were re-verified on 2026-09-30. `vite.config.ts` is excluded from the Next type-check because it destructures `d1`/`r2` keys the generated `hosting.json` doesn't declare.
+
+**Consequence**: On Vercel the build command must be overridden to `npm run build:next`. A running Worker was not tested; only that the bundle builds. Runtime secrets `MOTH_API_KEY` / `MOTH_API_BASE` must be set on whichever host serves the app.

@@ -220,12 +220,14 @@ All 8 engines publicly documented at [mothquantum.com](https://www.mothquantum.c
 **Local**:
 ```bash
 npm run dev        # http://localhost:3000
-npm run build      # Verify build
+npm run build      # vinext build (Cloudflare Workers bundle, used by the hosting setup)
+npm run build:next # standard Next.js build (use this on Vercel)
 npm run lint       # Type-check + linting
 ```
 
 **Deployment**:
-- Vercel recommended (Next.js native).
+- Needs a server runtime (the browser reaches Atlas through the `/api/moth/*` proxy). Hosting config for Cloudflare Workers is in `vite.config.ts` / `.openai/hosting.json`.
+- Vercel: set the Build Command to `npm run build:next`.
 - Set `MOTH_API_KEY` in Vercel env vars.
 - Proxy routes require Next.js runtime (serverless functions are supported).
 
