@@ -1,16 +1,36 @@
 # Chrono — Status & Handover (SOURCE OF TRUTH)
 
-**Last updated:** 2026-09-30 by orchestrator: deck finished, hosting setup re-verified, docs synced.
-Read order for a new agent: this file → `docs/BRIEF.md` (spec, verified API facts, contracts, ownership) → `decisions.md` → `docs/PRD.md` → `AGENTS.md`.
+**Last updated:** 2026-09-30, Round 2 completion pass.
+Read order: this file → `docs/BRIEF.md` → `decisions.md` → `docs/PRD.md` → `AGENTS.md`. Round 2 requirements are in `docs/ROUND2.md`; verification details are in `docs/ROUND2-QA.md`.
 
-## One-paragraph state
-Chrono is a quantum organism for Moth Hack 2026 · Challenge 06 Daisy Chain: 8 Moth Atlas engines chained, each consuming the previous output
-(Comet QRNG → Quantum Graph → Tessa → Quantum Blur → Blur Core → Entanglement Shader → QRC Audio → Retrocausal Echo).
-**The app is feature-complete and verified end-to-end.** 5 specimens are grown and committed in `public/specimens/`.
-Integration QA passed on 2026-09-26: `npm run build` succeeds (API routes server-rendered); the app loads the newest archived specimen instantly;
-the chain rail, inspector (with live coupling derivations), archive drawer, telemetry and mobile layout all work; the browser console is free of errors;
-and **a live Evolve driven from the browser UI ran the real chain through the `/api/moth/*` proxy — 33 API calls, all 2xx, zero errors, 72 s, specimen advanced Gen 1 → Gen 2.**
-Remaining (all need you): the deployed Demo URL for the form (field 9), pasting the form answers + uploading the poster/screenshots/PDF, and the demo video.
+## ROUND 2: COMPLETE
+
+The paused local work has been reviewed, completed and tested. The existing `round2-wip` snapshot is retained. No npm packages were added.
+
+| Piece | State |
+|---|---|
+| Wound mask | ✅ 98 regression checks: north-up coordinates, great-circle wounds, seams/poles, skin-sized masks, stronger contrast (0.15 baseline). |
+| Start flow | ✅ Blank embryo / New specimen / Create on every visit; archive listing never opens a specimen; New preserves controls and stops old audio. |
+| Shared panel | ✅ Immediate Parameters / Evolution switching, stage links, keyboard navigation with focus, follow mode, pending controls and plain-English copy. |
+| Chrono Lens | ✅ Without/With, scrub, Compare and overlays; Decoherence, Soma and Membrane visually inspected; bidirectional probe and Soma antipode checked. |
+| Viewport integration | ✅ 363 picking regressions; CPU ripple/shiver parity, Echo comparison fix, reveal lifecycle and embryo reset. |
+| Archived specimen | ✅ `42ac05-g1` regenerated through all five downstream engines in 65 s with four corrected wounds. All five saved specimens validate. |
+| Cleanup | ✅ Unused Inspector and evolution sandbox removed; docs reconciled; source lint and TypeScript clean. |
+| Live browser journey | ✅ Create: all eight engines in 146 s. Evolve: five engines in 80 s; three wound mask samples agree with clicks. Three Atlas seed rejections recovered via existing deterministic re-tinting. |
+| Production checks | ✅ Next and Cloudflare Worker builds; built Worker browser smoke (blank boot, WebGL, archive, lens, reset, no API calls/errors). |
+| Release | Public site: https://chrono.bedelau59.chatgpt.site · GitHub: https://github.com/bede-lau/chrono. Sites deployment status identifies the currently published version. |
+
+The completion pass used Luna for mask/docs and bounded lint/audio work, Sol for UI and independent review, and Astra for viewport/shader work. Independent final review found no blocking regressions. Root owned integration, live API runs and publishing.
+
+## Current behavior
+
+Chrono chains eight Moth Atlas engines: QRNG → Graph → Tessa → Blur → Blur Core → Entanglement Shader → QRC Audio → Retrocausal Echo. Visitors explicitly Create or choose an archived specimen. Touches queue wounds; Evolve runs the five downstream stages. One panel explains inputs, engines, artifact provenance and their effects on the organism. The archive contains five specimens, including the regenerated `42ac05-g1`.
+
+Headless screenshots use software WebGL and do not establish a GPU frame-rate benchmark. Engine latency remains variable. Submission form upload and a narrated competition video are separate from this code release.
+
+## Historical verification
+
+The following entries preserve Round 1 evidence; their auto-load/Inspector descriptions are superseded by Round 2 above.
 
 ## Verified integration QA (2026-09-26)
 | Check | Result |
@@ -66,9 +86,9 @@ bash deck/export.sh                                                             
 | 9 | Integration QA on :3000 | orchestrator | ✅ | See "Verified integration QA" above. |
 | 10 | Deck (4 slides, B&W keynote style, daisy of 8 line-art engine icons) | slides | ✅ | `deck/Chrono.pdf` (4 pages, verified) from `deck/chrono-deck.html`. Re-export with `bash deck/export.sh` (Playwright by default; `USE_DIA=1` opts into headless Dia, which hangs if Dia is already open). The HTML is now hand-edited source; the script that first generated it was not kept. |
 | 11 | Poster art (4:3 render) | orchestrator | ✅ | `docs/poster.png` (3200×2400) + `deck/assets/organism.png`; UI shots in `docs/screenshots/`. |
-| 12 | Submission answers | submission agent | ✅ | `docs/submission.md` — all 15 fields written from measured manifest data, plus an appendix table of specimen `308761`. Only field 9 (Demo URL) is still `TBD`, pending deploy. |
+| 12 | Submission answers | submission agent | ✅ | `docs/submission.md` — all 15 fields, measured manifest appendix and the live Demo URL. |
 | 13 | Push to GitHub `bede-lau/chrono` | orchestrator | ✅ | Pushed to `origin/main`. API key verified absent from every tracked file and from full history; only `.env.example` (placeholder) is committed. |
-| 14 | Deploy | **user** | ⬜ **only blocking item** | Hosting config now exists in the repo (see re-verification above) but I do not know whether a deploy has run or its URL. Whichever host: set runtime secrets `MOTH_API_KEY` and `MOTH_API_BASE`; the app needs a server runtime (Atlas CORS allows only `http://localhost:3000`, hence the `/api/moth/*` proxy). Put the live URL in `docs/submission.md` field 9. |
+| 14 | Deploy | orchestrator | ✅ configured | Existing public Sites deployment at `https://chrono.bedelau59.chatgpt.site`; runtime key/base are configured. Release version is tracked by Sites. |
 | 15 | Demo video | user | ⬜ | |
 
 ## Live results (real Atlas jobs, all attempt 1)
@@ -93,16 +113,25 @@ Job ids + coupling notes are in each `public/specimens/<id>/manifest.json` → `
 - Parallel agents may have left uncommitted edits after this snapshot: run `git status` first.
 - `/ultrareview` is user-triggered: the user runs `/code-review ultra` themselves.
 
-## Next steps (in order)
-1. **Get the Demo URL** (only blocker for that form field). Needs a server runtime; a static export cannot work (`/api/moth/*` proxy).
-   - If the Sites/Cloudflare hosting from commit `548fc03` was already deployed: open it, confirm a specimen loads and Evolve works, and confirm `MOTH_API_KEY` + `MOTH_API_BASE` are set as secrets there.
-   - Or Vercel: in the project settings set **Build Command = `npm run build:next`** (plain `npm run build` now produces a Cloudflare bundle, not `.next`), add the two env vars, then `npx vercel --prod` (needs one interactive `npx vercel login`). Untested by me.
-   Then paste the URL into `docs/submission.md` field 9.
-2. Paste `docs/submission.md` into the Airtable form; upload `docs/poster.png` (poster art),
-   `docs/screenshots/*` (additional images) and `deck/Chrono.pdf` (presentation slides).
-3. Record the demo video (the only genuinely manual piece): load app → touch the organism a few times →
-   Evolve → watch the rail run the 5 downstream engines → open the inspector on Membrane to show the coupling note →
-   enable audio. ~72 s of real chain time makes a good real-time take.
+## Remaining competition submission steps
+
+1. Paste `docs/submission.md` into the competition form and upload the existing poster/deck plus the Round 2 screenshots.
+2. Record a narrated video if required by the competition. Start blank → Create (or choose Archive for a shorter take) → touch → Evolve → compare Decoherence/Soma/Membrane → enable audio.
+
+## Repeatable Round 2 QA
+
+```bash
+npx tsc --noEmit -p .
+npm run lint
+npx tsx scripts/verify-mask.ts
+npx tsx scripts/verify-surface.ts
+npx tsx scripts/verify-start-flow.ts
+npx tsx scripts/verify-specimens.ts
+node scripts/qa/e2e.mjs http://localhost:3000 /private/tmp/chrono-e2e
+# Add --live for ~31 credits of real Create + Evolve.
+# Built Worker smoke (after starting wrangler dev on :3103):
+node scripts/qa/production.mjs http://localhost:3103 /private/tmp/chrono-production
+```
 
 ## If you are a coding agent taking over
 - Contracts (`src/lib/chain/types.ts`, `src/lib/store.ts`) are additive-only.

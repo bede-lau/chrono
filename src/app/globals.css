@@ -106,6 +106,14 @@
   backdrop-filter: blur(32px) saturate(150%);
 }
 
+/* The persistent right panel: dark enough to read over the organism, light enough to stay part of the stage. */
+@utility glass-panel {
+  background: rgb(12 12 14 / 0.74);
+  border: 1px solid var(--hairline);
+  -webkit-backdrop-filter: blur(28px) saturate(145%);
+  backdrop-filter: blur(28px) saturate(145%);
+}
+
 @utility no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -296,6 +304,19 @@
 }
 .shimmer {
   animation: chrono-shimmer 1.6s var(--ease-out) infinite;
+}
+
+/* Right panel view swap: the new view is there in the same frame and settles in 140 ms (never waits on an exit). */
+@keyframes chrono-view-in {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.view-in {
+  animation: chrono-view-in 140ms var(--ease-out) both;
 }
 
 /* Soft radial vignette over the stage; the organism stays the brightest thing on screen. */

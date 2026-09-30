@@ -2,32 +2,32 @@
  * Pure helpers that turn chain artifacts into viewport-ready numbers.
  * OWNER: viewport agent.
  *
- * UV conventions (shared with the imaging module and the blur-v1 wound mask):
- *   Wound / image space: u = longitude 0..1, v = 0 at the TOP row (north pole, +Y) .. 1 at the bottom row.
- *   Mesh / texture space: three.js SphereGeometry — uv.y = 1 - v (images are uploaded with flipY).
- *   Direction for (u, v):  phi = 2πu, theta = πv,  d = (-cos φ sin θ, cos θ, sin φ sin θ)  (matches SphereGeometry).
+ * UV conventions (shared contract, see `Wound` in src/lib/chain/types.ts):
+ *   Wound / probe / image space: u = longitude 0..1, v = latitude 0..1 with v = 1 at the NORTH pole (+Y) = TOP image
+ *   row (row = (1 - v) * height). Same as three.js SphereGeometry uv.y and the shader's dirToUv.
+ *   Direction for (u, v):  phi = 2πu, polar = (1 - v)π,  d = (-cos φ sin p, cos p, sin φ sin p)  (matches SphereGeometry).
  */
-import type { BlochVector, ColonyArtifact, Lut, SomaArtifact } from "@/lib/chain/types";
+import type { BlochVector, ColonyArtifact, Lut, SomaArtifact, Wound } from "@/lib/chain/types";
 
 export const TAU = Math.PI * 2;
 
 export type Vec3 = [number, number, number];
 
-/** Wound/image-space (u, v) -> unit direction on the organism (object space, before stretch). */
+/** (u, v) with v = 1 north -> unit direction on the organism (object space, before stretch). */
 export function uvToDir(u: number, v: number): Vec3 {
   const phi = u * TAU;
-  const theta = Math.min(Math.max(v, 0), 1) * Math.PI;
-  const s = Math.sin(theta);
-  return [-Math.cos(phi) * s, Math.cos(theta), Math.sin(phi) * s];
+  const polar = (1 - Math.min(Math.max(v, 0), 1)) * Math.PI;
+  const s = Math.sin(polar);
+  return [-Math.cos(phi) * s, Math.cos(polar), Math.sin(phi) * s];
 }
 
-/** Unit direction -> wound/image-space (u, v). Inverse of uvToDir. */
+/** Unit direction -> (u, v) with v = 1 north. Inverse of uvToDir (identical to the shader's dirToUv). */
 export function dirToUv(d: Vec3): { u: number; v: number } {
   const len = Math.hypot(d[0], d[1], d[2]) || 1;
   const x = d[0] / len, y = d[1] / len, z = d[2] / len;
   let u = Math.atan2(z, -x) / TAU;
   u = ((u % 1) + 1) % 1;
-  const v = Math.acos(Math.min(Math.max(y, -1), 1)) / Math.PI;
+  const v = 1 - Math.acos(Math.min(Math.max(y, -1), 1)) / Math.PI;
   return { u, v };
 }
 
@@ -78,6 +78,29 @@ export function morphologyFromGenome(bytes?: number[] | null): Morphology {
   return { seed, stretch, lobes, sharp, formAmp };
 }
 
+/** 256 genome bits (MSB first) as 0/1 floats; null when there is no genome. */
+export function genomeBits(bytes?: number[] | null): Float32Array | null {
+  if (!bytes || bytes.length < 1) return null;
+  const out = new Float32Array(256);
+  for (let i = 0; i < 256; i++) out[i] = ((bytes[i >> 3] ?? 0) >> (7 - (i & 7))) & 1;
+  return out;
+}
+
+/** n evenly spread unit directions (spherical Fibonacci), north -> south. */
+export function fibonacciDirs(n: number): Float32Array {
+  const out = new Float32Array(n * 3);
+  const ga = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < n; i++) {
+    const y = 1 - (2 * (i + 0.5)) / n;
+    const r = Math.sqrt(Math.max(0, 1 - y * y));
+    const a = i * ga;
+    out[i * 3] = Math.cos(a) * r;
+    out[i * 3 + 1] = y;
+    out[i * 3 + 2] = Math.sin(a) * r;
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------------ colony */
 
 export interface Nucleus {
@@ -105,27 +128,33 @@ export function srgbToLinear(c: Vec3): Vec3 {
 
 /**
  * Bloch vector -> nucleus. Placement follows the colony-seed convention (src/lib/imaging/colony.ts): the Bloch polar
- * angle θ (from +Z) is the image latitude (v = θ/π, north = |0>), the azimuth φ the longitude (u = (φ + π)/2π).
+ * angle θ (from +Z) is the image row (θ = 0 = top row = north, |0>), the azimuth φ the longitude (u = (φ + π)/2π).
  * Colour follows Tessa's colour sphere: θ=0 white pole, θ=π black pole, hue = φ, saturation ~ |r|.
  */
 export function nucleusFromBloch(b: BlochVector, i: number): Nucleus {
   const r = Math.hypot(b.x, b.y, b.z);
   const theta = r > 1e-6 ? Math.acos(Math.max(-1, Math.min(1, b.z / r))) : Math.PI / 2;
   const phi = Math.atan2(b.y, b.x); // -π..π
-  // imaging/colony.ts renders the seed with phi = 2πu − π, v = θ/π  ->  u = (φ + π) / 2π
-  const dir = uvToDir((phi + Math.PI) / TAU, theta / Math.PI);
+  // imaging/colony.ts: row fraction = θ/π (top = north)  ->  v = 1 - θ/π ; u = (φ + π) / 2π
+  const dir = uvToDir((phi + Math.PI) / TAU, 1 - theta / Math.PI);
   // Keep nuclei luminous (they glow), but preserve Tessa's hue + saturation semantics.
   const light = 0.42 + 0.3 * (1 - theta / Math.PI);
   const color = srgbToLinear(hslToRgb((phi + TAU) / TAU, 0.35 + 0.6 * Math.min(1, r), light));
   return { dir, color, strength: Math.min(1, r), phase: (i * 2.399) % TAU };
 }
 
+export const MAX_NUCLEI = 12;
+
 export function nucleiFromColony(colony?: ColonyArtifact | null): Nucleus[] {
   if (!colony?.bloch?.length) return [];
   return colony.bloch.slice(0, MAX_NUCLEI).map(nucleusFromBloch);
 }
 
-export const MAX_NUCLEI = 12;
+/** Stable key for a colony (changes only when the nuclei do). */
+export function colonyKey(colony?: ColonyArtifact | null): string | null {
+  if (!colony?.bloch?.length) return null;
+  return `${colony.numQubits}:${colony.bloch.map((b) => `${b.x.toFixed(3)},${b.y.toFixed(3)},${b.z.toFixed(3)}`).join("|")}`;
+}
 
 /** Specimen hue (0..1) from the dominant nucleus (largest |r|). */
 export function specimenHue(colony?: ColonyArtifact | null): number | null {
@@ -150,7 +179,7 @@ export const SOMA_RES = 32;
 
 /**
  * Resample a W x H row-major grid (row 0 = top/north) to SOMA_RES² with rows flipped for a DataTexture
- * (row 0 -> texture v = 0, south). Bilinear; u wraps, v clamps.
+ * (texture row 0 = v 0 = south). Bilinear; u wraps, v clamps.
  */
 function resampleField(src: ArrayLike<number>, w: number, h: number, map: (v: number) => number): Float32Array {
   const R = SOMA_RES;
@@ -188,6 +217,35 @@ function centreField(out: Float32Array): Float32Array {
   return out;
 }
 
+/**
+ * Standardise by the field's own spread (area-weighted: equirect rows shrink towards the poles) and soft-clip with
+ * tanh. Every specimen then warps by a perceptually similar amount, whatever the absolute range blur-core returned.
+ */
+function standardiseField(out: Float32Array, soft = 1.7): Float32Array {
+  const R = SOMA_RES;
+  let wsum = 0, mean = 0;
+  for (let y = 0; y < R; y++) {
+    const w = Math.sin(((y + 0.5) / R) * Math.PI);
+    for (let x = 0; x < R; x++) {
+      mean += w * out[y * R + x];
+      wsum += w;
+    }
+  }
+  mean /= wsum;
+  let varc = 0;
+  for (let y = 0; y < R; y++) {
+    const w = Math.sin(((y + 0.5) / R) * Math.PI);
+    for (let x = 0; x < R; x++) varc += w * (out[y * R + x] - mean) ** 2;
+  }
+  const sd = Math.sqrt(varc / wsum);
+  if (!(sd > 1e-9)) {
+    out.fill(0);
+    return out;
+  }
+  for (let i = 0; i < out.length; i++) out[i] = Math.tanh((out[i] - mean) / (soft * sd));
+  return out;
+}
+
 /** Mean of the northmost / southmost texture rows (poles are single points: fade to these). */
 export function poleMeans(field: Float32Array): [number, number] {
   const R = SOMA_RES;
@@ -200,28 +258,80 @@ export function poleMeans(field: Float32Array): [number, number] {
 }
 
 /**
- * Soma grid (N x N, row-major, row 0 = top/north) -> SOMA_RES² centred displacement in [-1, 1], rows flipped
- * for a DataTexture sampled with mesh uv. Log compression tames blur-core's heavy-tailed output
- * (one hotspot + faint non-local echoes along its row/column become a lattice of smaller nodules).
+ * Soma grid (N x N, row-major, row 0 = top/north) -> SOMA_RES² displacement field in (-1, 1), rows flipped for a
+ * DataTexture sampled with mesh uv. Heavy-tailed outputs (one hotspot + faint non-local echoes, as blur-core returns
+ * for sparse inputs) are log-compressed first so the echoes survive; ordinary blurred tissue grids stay linear.
+ * The result is standardised (σ-normalised, tanh soft-clipped): amplitude is consistent between specimens.
  */
 export function somaField(soma?: SomaArtifact | null): Float32Array | null {
   if (!soma?.grid?.length) return null;
   const n = soma.size > 0 ? soma.size : Math.round(Math.sqrt(soma.grid.length));
   if (n < 2 || soma.grid.length < n * n) return null;
   const src = soma.grid;
-  let lo = Infinity, hi = -Infinity;
-  for (let i = 0; i < n * n; i++) {
-    const v = src[i];
-    if (!Number.isFinite(v)) continue;
-    if (v < lo) lo = v;
-    if (v > hi) hi = v;
-  }
-  if (!Number.isFinite(lo)) return null;
-  const span = hi - lo > 1e-9 ? hi - lo : 1;
+  const vals: number[] = [];
+  for (let i = 0; i < n * n; i++) if (Number.isFinite(src[i])) vals.push(src[i]);
+  if (vals.length < 4) return null;
+  vals.sort((a, b) => a - b);
+  const q = (p: number) => vals[Math.min(vals.length - 1, Math.max(0, Math.round(p * (vals.length - 1))))];
+  const lo = vals[0];
+  const hi = vals[vals.length - 1];
+  const span = hi - lo > 1e-12 ? hi - lo : 1;
+  const heavy = (hi - q(0.5)) / Math.max(q(0.9) - q(0.1), 1e-12) > 4.5;
   const EPS = 0.004;
   const LOGN = Math.log(1 + 1 / EPS);
-  const comp = (v: number) => Math.log(1 + Math.max(0, (Number.isFinite(v) ? v : lo) - lo) / span / EPS) / LOGN;
-  return centreField(resampleField(src, n, n, comp));
+  const map = heavy
+    ? (v: number) => Math.log(1 + Math.max(0, (Number.isFinite(v) ? v : lo) - lo) / span / EPS) / LOGN
+    : (v: number) => ((Number.isFinite(v) ? v : lo) - lo) / span;
+  return standardiseField(resampleField(src, n, n, map));
+}
+
+export interface SomaPeak {
+  dir: Vec3;
+  /** Displacement-field value at the bump, 0..~2 (field - e·antipode). */
+  value: number;
+}
+
+/**
+ * The strongest bumps of the entangled displacement `f(d) - e·f(-d)` (the body the viewer sees): each one sits
+ * opposite a dent. Greedy non-maximum suppression keeps them apart; the poles are skipped (the field fades there).
+ * Input: SOMA_RES² texture-layout field (row 0 = south).
+ */
+export function somaPeaks(field: Float32Array, entangle: number, count = 6, minSep = 0.55): SomaPeak[] {
+  const R = SOMA_RES;
+  const total = new Float32Array(R * R);
+  for (let y = 0; y < R; y++)
+    for (let x = 0; x < R; x++) {
+      const ax = (x + R / 2) % R;
+      const ay = R - 1 - y;
+      total[y * R + x] = field[y * R + x] - entangle * field[ay * R + ax];
+    }
+  const cands: { i: number; v: number }[] = [];
+  for (let y = 3; y < R - 3; y++)
+    for (let x = 0; x < R; x++) {
+      const v = total[y * R + x];
+      let isMax = v > 0.05;
+      for (let dy = -1; dy <= 1 && isMax; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          if (total[(y + dy) * R + ((x + dx + R) % R)] > v) {
+            isMax = false;
+            break;
+          }
+        }
+      if (isMax) cands.push({ i: y * R + x, v });
+    }
+  cands.sort((a, b) => b.v - a.v);
+  const out: SomaPeak[] = [];
+  const top = cands[0]?.v ?? 0;
+  for (const c of cands) {
+    if (out.length >= count || c.v < top * 0.2) break;
+    const x = c.i % R;
+    const y = (c.i - x) / R;
+    const dir = uvToDir((x + 0.5) / R, (y + 0.5) / R);
+    if (out.some((p) => Math.acos(Math.max(-1, Math.min(1, p.dir[0] * dir[0] + p.dir[1] * dir[1] + p.dir[2] * dir[2]))) < minSep)) continue;
+    out.push({ dir, value: c.v });
+  }
+  return out;
 }
 
 /**
@@ -262,6 +372,71 @@ export function colonyRelief(rgba: ArrayLike<number>, w: number, h: number): Flo
   // rounded domes: repeated blur approximates distance-to-membrane
   cell = blur(blur(cell));
   return centreField(resampleField(cell, w, h, (v) => v));
+}
+
+/* -------------------------------------------------------------------- mask */
+
+export interface MaskInfo {
+  /** Baseline level (whole-body aging), 0..1. */
+  lo: number;
+  /** Peak level, 0..1. */
+  hi: number;
+  /** Wound centres actually present in the mask (v = 1 north). */
+  scars: { u: number; v: number; strength: number }[];
+}
+
+/**
+ * Analyse the wound mask sent to blur-v1 (RGBA8, row 0 = top = north). Wound centres come from the specimen's wounds
+ * when the mask confirms them (either latitude convention: archives painted before the v-flip fix stay aligned),
+ * otherwise from the mask's own local maxima.
+ */
+export function analyseMask(rgba: ArrayLike<number>, w: number, h: number, wounds: Wound[] = []): MaskInfo {
+  const n = w * h;
+  const val = new Float32Array(n);
+  for (let i = 0; i < n; i++) val[i] = rgba[i * 4] / 255;
+  const sorted = Array.from(val).sort((a, b) => a - b);
+  const lo = sorted[Math.floor(0.2 * (n - 1))] ?? 0;
+  const hi = sorted[n - 1] ?? 0;
+  const scars: MaskInfo["scars"] = [];
+  if (hi - lo < 0.06) return { lo, hi, scars };
+  const at = (u: number, v: number) => {
+    const fx = (((u % 1) + 1) % 1) * w - 0.5;
+    const fy = (1 - Math.min(1, Math.max(0, v))) * h - 0.5;
+    const x0 = Math.floor(fx), y0 = Math.floor(fy);
+    const tx = fx - x0, ty = fy - y0;
+    const px = (x: number, y: number) => val[Math.min(h - 1, Math.max(0, y)) * w + (((x % w) + w) % w)];
+    return (px(x0, y0) * (1 - tx) + px(x0 + 1, y0) * tx) * (1 - ty) + (px(x0, y0 + 1) * (1 - tx) + px(x0 + 1, y0 + 1) * tx) * ty;
+  };
+  const thr = lo + 0.5 * (hi - lo);
+  for (const wd of wounds) {
+    if (at(wd.u, wd.v) >= thr) scars.push({ u: wd.u, v: wd.v, strength: wd.strength });
+    else if (at(wd.u, 1 - wd.v) >= thr) scars.push({ u: wd.u, v: 1 - wd.v, strength: wd.strength });
+  }
+  if (!scars.length) {
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const v0 = val[y * w + x];
+        if (v0 < thr) continue;
+        let isMax = true;
+        let sx = 0, sy = 0, sw = 0;
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++) {
+            const yy = y + dy;
+            if (yy < 0 || yy >= h) continue;
+            const vv = val[yy * w + ((x + dx + w) % w)];
+            if ((dx || dy) && vv > v0) isMax = false;
+            const k = Math.max(0, vv - lo);
+            sx += k * dx;
+            sy += k * dy;
+            sw += k;
+          }
+        if (!isMax) continue;
+        const cx = x + 0.5 + (sw > 0 ? sx / sw : 0);
+        const cy = y + 0.5 + (sw > 0 ? sy / sw : 0);
+        scars.push({ u: cx / w, v: 1 - cy / h, strength: (v0 - lo) / (hi - lo) });
+      }
+  }
+  return { lo, hi, scars };
 }
 
 /* --------------------------------------------------------------------- LUT */

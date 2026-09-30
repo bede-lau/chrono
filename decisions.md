@@ -50,13 +50,13 @@
 
 ---
 
-## D6: Pre-Grown Specimen Archive in `public/specimens`
+## D6: Pre-Grown Specimen Archive in `public/specimens` (historical; superseded for first-run behavior)
 
 **Context**: Tessa latency + hackathon load risk timeout on cold start. Judges need something to see instantly.
 
-**Decision**: Pre-compute 3–5 complete specimens (genome → echo) and store as JSON snapshots in `public/specimens`. On load, show newest archived specimen (no API call). Archive button allows manual export.
+**Decision (Round 1)**: Pre-compute 3–5 complete specimens (genome → echo) and store as JSON snapshots in `public/specimens`. The initial version opened the newest specimen on load. Round 2 supersedes that automatic opening: the app starts blank, loads only the archive list, and opens a specimen only after an explicit selection.
 
-**Consequence**: Instant first paint, resilience against Tessa outage. Users can still grow new specimens in parallel. Demo is guaranteed to work.
+**Consequence (Round 1)**: The archive provided ready-to-load specimens and resilience against Tessa outages. Round 2 retains that fallback, but the user now chooses when to open one; archive availability alone does not guarantee that a deployment is configured or working.
 
 ---
 
@@ -135,3 +135,36 @@
 **Decision**: Keep it. Both builds were re-verified on 2026-09-30. `vite.config.ts` is excluded from the Next type-check because it destructures `d1`/`r2` keys the generated `hosting.json` doesn't declare.
 
 **Consequence**: On Vercel the build command must be overridden to `npm run build:next`. A running Worker was not tested; only that the bundle builds. Runtime secrets `MOTH_API_KEY` / `MOTH_API_BASE` must be set on whichever host serves the app.
+
+
+## D15: Explicit New Specimen start
+
+**Context**: First-run testing showed that automatically opening the newest archived organism hid the Create action and made the app feel as if work had already started.
+
+**Decision**: Start with no selected specimen, an embryo, idle stages and Parameters active. Load the archive index without opening an entry. Nothing calls the chain until the user presses **Create**. The same primary action becomes **Evolve** for a loaded specimen; New specimen resets to blank while retaining parameter choices.
+
+**Consequence**: The first action and the distinction between creating and evolving are clear; archived specimens remain available by explicit choice.
+
+## D16: Shared Parameters and Evolution panel
+
+**Context**: A separate Inspector made stage details feel detached from the parameter controls and added friction when moving between engines.
+
+**Decision**: Use one right panel with immediate **Parameters | Evolution** switching. Evolution includes concise plain-English engine explanations, visible-organism descriptions, controls, artifact preview and collapsible run details.
+
+**Consequence**: Users can move directly between controls and the selected engine’s explanation while the organism remains the visual focus.
+
+## D17: Chrono Lens for engine attribution
+
+**Context**: The effects of Decoherence, Soma and Membrane were too subtle to attribute to a particular engine.
+
+**Decision**: Each Evolution stage can isolate its contribution on the same organism using a Without/With scrubber, hemisphere comparison and diagnostic overlay. A linked probe connects the organism surface to stage artifact previews.
+
+**Consequence**: Users can see how a stage changes the organism and relate the 2D artifacts to the 3D surface.
+
+## D18: North-up spherical wound mask
+
+**Context**: The first mask rendered UV `v=1` at the north pole while image rows treated `v=0` as the top; flat pixel-space Gaussians also distorted wound shape across the sphere.
+
+**Decision**: Treat `v=1` as the north pole/top row (`row = (1-v)·height`) and form wounds from great-circle distance. Keep a non-zero baseline for Atlas compatibility and make wound contrast visibly stronger.
+
+**Consequence**: Painted wounds align with the organism’s latitude and remain round on its spherical surface.

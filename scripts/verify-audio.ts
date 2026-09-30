@@ -36,9 +36,8 @@ function decodeHdrRedChannel(bytes: Uint8Array): { width: number; height: number
 
   const magic = readLine();
   if (!magic.startsWith("#?")) throw new Error("decodeHdrRedChannel: not a Radiance HDR file");
-  let line: string;
   // Header lines (FORMAT=, EXPOSURE=, ...) until the blank line.
-  while ((line = readLine()) !== "") {
+  while (readLine() !== "") {
     if (pos >= bytes.length) throw new Error("decodeHdrRedChannel: unexpected EOF in header");
   }
   const resLine = readLine();

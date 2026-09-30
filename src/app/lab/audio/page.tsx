@@ -70,55 +70,60 @@ export default function AudioLabPage() {
   const { click } = useAudioEngine();
 
   useEffect(() => {
-    const genome = makeFakeGenome();
-    const membrane = makeFakeMembrane();
-    const soma = makeFakeSoma();
-    const chunks = synthesizeVocabulary(membrane, soma, genome, { chunks: 10, chunkSeconds: 1, sampleRate: 22050 });
+    let url: string | null = null;
+    const task = window.setTimeout(() => {
+      const genome = makeFakeGenome();
+      const membrane = makeFakeMembrane();
+      const soma = makeFakeSoma();
+      const chunks = synthesizeVocabulary(membrane, soma, genome, { chunks: 10, chunkSeconds: 1, sampleRate: 22050 });
 
-    let total = 0;
-    const decoded = chunks.map((c) => {
-      const d = decodeWav(c.wav);
-      total += d.channels[0].length;
-      return d.channels[0];
-    });
-    const merged = new Float32Array(total);
-    let off = 0;
-    let peak = 0;
-    let sumSq = 0;
-    let nanFound = false;
-    for (const arr of decoded) {
-      merged.set(arr, off);
-      off += arr.length;
-      for (const v of arr) {
-        if (Number.isNaN(v)) nanFound = true;
-        peak = Math.max(peak, Math.abs(v));
-        sumSq += v * v;
+      let total = 0;
+      const decoded = chunks.map((c) => {
+        const d = decodeWav(c.wav);
+        total += d.channels[0].length;
+        return d.channels[0];
+      });
+      const merged = new Float32Array(total);
+      let off = 0;
+      let peak = 0;
+      let sumSq = 0;
+      let nanFound = false;
+      for (const arr of decoded) {
+        merged.set(arr, off);
+        off += arr.length;
+        for (const v of arr) {
+          if (Number.isNaN(v)) nanFound = true;
+          peak = Math.max(peak, Math.abs(v));
+          sumSq += v * v;
+        }
       }
-    }
-    const rms = Math.sqrt(sumSq / Math.max(1, merged.length));
-    setInfo(`${chunks.length} chunks · ${total} samples · peak ${peak.toFixed(3)} · rms ${rms.toFixed(3)} · nan:${nanFound}`);
+      const rms = Math.sqrt(sumSq / Math.max(1, merged.length));
+      setInfo(`${chunks.length} chunks · ${total} samples · peak ${peak.toFixed(3)} · rms ${rms.toFixed(3)} · nan:${nanFound}`);
 
-    const wavBytes = encodeWav([merged], 22050);
-    const arrayBuffer = new ArrayBuffer(wavBytes.byteLength);
-    new Uint8Array(arrayBuffer).set(wavBytes);
-    const blob = new Blob([arrayBuffer], { type: "audio/wav" });
-    const url = URL.createObjectURL(blob);
-    setDemoUrl(url);
+      const wavBytes = encodeWav([merged], 22050);
+      const arrayBuffer = new ArrayBuffer(wavBytes.byteLength);
+      new Uint8Array(arrayBuffer).set(wavBytes);
+      const blob = new Blob([arrayBuffer], { type: "audio/wav" });
+      url = URL.createObjectURL(blob);
+      setDemoUrl(url);
 
-    setSpecimen({
-      id: "labfake",
-      name: "Lab Specimen",
-      createdAt: new Date().toISOString(),
-      generation: 0,
-      controls: { circuitDepth: 8, entanglement: 0.45, decay: 0.5, machine: "aer" },
-      wounds: [],
-      echo: { url },
-      runs: {},
-    });
+      setSpecimen({
+        id: "labfake",
+        name: "Lab Specimen",
+        createdAt: new Date().toISOString(),
+        generation: 0,
+        controls: { circuitDepth: 8, entanglement: 0.45, decay: 0.5, machine: "aer" },
+        wounds: [],
+        echo: { url },
+        runs: {},
+      });
+    }, 0);
 
-    return () => URL.revokeObjectURL(url);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      window.clearTimeout(task);
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [setSpecimen]);
 
   return (
     <div className="flex min-h-screen flex-col gap-6 bg-[#050506] p-8 font-mono text-white/90">

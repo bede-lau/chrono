@@ -5,10 +5,10 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
 /**
- * While `active`: move focus into the container, keep Tab cycling inside it, and give focus back to whatever
- * had it before when the container closes.
+ * While `active`: move focus into the container, keep Tab cycling inside it (only when `cycle` — modal surfaces;
+ * a non-modal drawer lets Tab leave), and give focus back to whatever had it before when the container closes.
  */
-export function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean) {
+export function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean, cycle = true) {
   useEffect(() => {
     if (!active) return;
     const root = ref.current;
@@ -24,7 +24,7 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean
     const raf = requestAnimationFrame(() => first.focus({ preventScroll: true }));
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Tab") return;
+      if (!cycle || e.key !== "Tab") return;
       const list = items();
       if (list.length === 0) {
         e.preventDefault();
@@ -47,5 +47,5 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean
       document.removeEventListener("keydown", onKey);
       if (previous && document.contains(previous)) previous.focus({ preventScroll: true });
     };
-  }, [ref, active]);
+  }, [ref, active, cycle]);
 }

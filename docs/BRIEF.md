@@ -35,12 +35,12 @@ hairline UI, no clutter, no explanatory filler text, every interaction has immed
 | 7 | Echo | `retrocausal-echo-v1` | song **output_asset_id** | quantum multi-tap **echo** WAV (what plays) |
 
 Coupling derivations (pipeline agent implements; every run stores a one-line `note` with the actual numbers,
-e.g. `"absorption 0.71 ← tissue entropy 5.68 bits"` — the inspector shows it; this is how judges see "effective use"):
+e.g. `"absorption 0.71 ← tissue entropy 5.68 bits"` — Evolution run details show it; this is how judges see "effective use"):
 - Colony: `seed = uint32(genome[0..3])`, `num_qubits = 6 + (genome[4] % 5)` (6–10), `shots 1024`, `mode "emu"`,
   `coupling_map` = ring + chords where genome bits are set.
 - Morphogenesis: `machine = controls.machine` (default `aer`; `fake_fez` = IBM Fez noise model), `shots 1024`.
 - Decoherence: `strength = 0.25 + 0.6·decay`, `reach = 0.8·entanglement`, `style = rx` (ry collapses gradients),
-  mask = wounds painted at UV (+ baseline 0.35 so the whole body ages).
+  mask = spherical great-circle wound Gaussians painted at UV, with `v = 1` at the north pole/top image row (`row = (1-v)·height`); baseline 0.15 keeps the body aging while wounds remain visibly stronger.
 - Soma: `values = lumaGrid(tissue, 32)`, `strength = 0.3 + 0.5·entanglement`, `reach = entanglement`, `style "xy"`.
 - Membrane: `reflectance = clamp(0.08 + 0.6·meanLuma, .05, .9)`, `absorption = clamp(entropy/8, .1, .98)`,
   `layers = 1 + round(3·normVariance)` (1–4), `incoming_rays = layers + 4 + genome[5] % 4` (respect 21-qubit budget),
@@ -100,30 +100,33 @@ mid-edit; only fix errors in files you own).
 
 ## 5. UX specification (UI + viewport agents)
 
+### Round 2 interaction model
+- A new visitor starts with no specimen, an embryo, idle stages and Parameters selected. Bootstrap loads only the archive index; no specimen opens and no engine runs until **Create** is pressed.
+- The primary action is **Create** while no specimen is selected and **Evolve** afterwards. **New specimen** resets to the blank state while retaining parameter values. Opening the archive is an explicit user choice.
+- One right-side panel has **Parameters | Evolution** views (bottom sheet on mobile). Stage selection, keyboard shortcuts, stage links and the toggle switch views immediately. Evolution follows the active engine while a run progresses until the user manually selects a stage.
+- Evolution presents the stage gist, a plain-English “What it does” explanation, “On the organism” explanation, engine-specific controls, artifact preview, then collapsible run details (coupling note, params, job id, latency and attempts). Before Create it remains useful as documentation; artifacts show “Waiting for Create.”
+- The **Chrono Lens** isolates an engine’s contribution on the same organism: scrub Without ↔ With, compare hemispheres, or show a diagnostic overlay. Opening an Evolution stage selects its lens; Parameters turns the lens off. Lens overlays and reveal pulses make Decoherence scars, Soma displacement and Membrane angle bands legible on the blob. A linked probe connects blob hover to artifact previews and back.
+- Controls preview on the organism immediately; changed values are marked pending until Evolve. A completed, non-cached stage may briefly reveal its contribution unless the user is dragging.
+
 Design language: near-black stage (`#050506`) with a soft radial vignette; the organism is the only saturated
 colour. UI is monochrome: white at 90/60/40/12/6 % alpha, hairline 1px borders `white/8%`, 10–12 px uppercase
 labels with 0.14em tracking, Geist Sans for UI, Geist Mono for numbers/ids. Accent = `--specimen-hue` (CSS var set
 from the colony's dominant nucleus hue) used only for the active stage glow and the primary button focus ring.
 Motion: 200–400 ms ease-out, no bounces; the chain rail pulse travels along links as artifacts hand over.
-No paragraphs of explanatory text anywhere. Short labels only.
+Keep the interface restrained, but explain each engine in plain English in its Evolution view; descriptions live in `src/lib/chain/stageCopy.ts` alongside concise labels.
 
 Layout (desktop): full-bleed canvas.
 - Top-left: wordmark **Chrono**, specimen identity `Specimen 7F3A · Gen 3`, genome strip (256 bits as a hairline barcode).
 - Top-right: audio toggle (with live mini spectrum), archive, capture (PNG), info.
-- Right: compact controls card — sliders **Circuit depth** (1–12), **Entanglement** (0–1), **Decoherence** (0–1);
-  segmented **Ideal / IBM Fez noise** (machine). Primary **Evolve** (badge = pending wound count), secondary **New specimen**.
-- Bottom: **the daisy chain rail** — 8 nodes linked by a line: index, stage title, engine name, status
-  (idle · running spinner · retrying n/6 · done ✓ + latency · cached · failed). Click → Inspector.
-- Inspector (right slide-over; bottom sheet on mobile): stage title, engine name + id, consumes → produces,
-  the artifact itself (genome bit grid; colony nuclei + seed PNG pixelated; skin; tissue + mask; soma heightmap;
-  LUT heatmaps + GLSL; waveform + play for voice/echo), the coupling `note`, params sent, job id (copy), latency, attempts.
+- Right: one panel with **Parameters | Evolution** toggle. Parameters contains Circuit depth (1–12), Entanglement (0–1), Decoherence (0–1), and Ideal / IBM Fez noise. Footer action is **Create** for a blank state or **Evolve** for a loaded specimen; New specimen is available when one is loaded.
+- Bottom: **the daisy chain rail** — 8 nodes with stage, engine and status (idle · running · retrying · done · cached · failed). Selecting a node opens its Evolution view in the shared right panel.
 - Bottom-left: telemetry in mono — fps, qubits, active engine, last latency, entropy Δ; expandable log.
-- First run: one fading hint near the organism: "Touch to decohere". Dismiss on first touch.
+- Show “Touch to decohere” only when a specimen exists. A blank state may show a quiet “New specimen” label; there is no central grow button.
 - Growing: organism starts as a translucent embryo and gains each property as its stage lands
   (nuclei → skin → aging → shape → iridescence → breath with sound).
-- Keys: Space evolve · N new specimen · M mute · 1–8 inspect stage · Esc close.
+- Keys: Space runs the primary action · N new specimen · M mute · 1–8 opens that stage’s Evolution view · Esc returns to Parameters.
 - Mobile (<768 px): rail becomes a horizontally scrollable compact strip; controls in a bottom sheet.
-- On load: show the newest archived specimen instantly (from `public/specimens`), never an empty screen.
+- On load: start blank at New specimen. Load the archive list, but open a specimen only on explicit selection.
 
 ## 6. Ownership & contracts
 

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useChrono } from "@/lib/store";
+import { canEvolve } from "./actions";
 import { T_SLOW, cx } from "./primitives";
 
 const KEY = "chrono.hint.decohere";
@@ -22,9 +23,12 @@ function writeDismissed() {
   }
 }
 
-/** First-run hint near the organism. Gone for good after the first wound. */
+/**
+ * First-run hint near the organism. Only once there is a specimen a touch can wound (a finished Create or an
+ * archived one) and nothing is running. Gone for good after the first wound.
+ */
 export function Hint({ compact = false }: { compact?: boolean }) {
-  const hasSpecimen = useChrono((s) => !!s.specimen);
+  const hasSpecimen = useChrono((s) => canEvolve(s.specimen) && s.mode === "idle");
   const [show, setShow] = useState(false);
 
   useEffect(() => {

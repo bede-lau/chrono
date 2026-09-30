@@ -9,6 +9,7 @@ import {
   HalfFloatType,
   ImageLoader,
   LinearFilter,
+  NoColorSpace,
   RedFormat,
   RepeatWrapping,
   RGBAFormat,
@@ -96,29 +97,33 @@ export function solidTexture(r: number, g: number, b: number, a = 255): DataText
 const loader = new ImageLoader();
 loader.setCrossOrigin("anonymous");
 
+/** Load an artifact image (data:, blob: or /specimens/... URL). */
+export function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    loader.load(url, resolve, undefined, (err) => reject(err));
+  });
+}
+
 /**
- * Load an artifact image (data:, blob: or /specimens/... URL) as an sRGB, LINEAR-filtered, u-periodic texture.
+ * Wrap a loaded image as a LINEAR-filtered, u-periodic texture. Colour artifacts are sRGB; data images (the wound
+ * mask) are raw (`srgb = false`) so the shader reads the exact values sent to the engine.
  * Images keep flipY (row 0 = top = north pole at uv.y = 1).
  */
+export function textureFromImage(img: HTMLImageElement, srgb = true): Texture {
+  const t = new Texture(img);
+  t.colorSpace = srgb ? SRGBColorSpace : NoColorSpace;
+  t.wrapS = RepeatWrapping;
+  t.wrapT = ClampToEdgeWrapping;
+  t.magFilter = LinearFilter;
+  t.minFilter = LinearFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  return t;
+}
+
+/** Load an artifact image as an sRGB texture. */
 export function loadImageTexture(url: string): Promise<Texture> {
-  return new Promise((resolve, reject) => {
-    loader.load(
-      url,
-      (img) => {
-        const t = new Texture(img);
-        t.colorSpace = SRGBColorSpace;
-        t.wrapS = RepeatWrapping;
-        t.wrapT = ClampToEdgeWrapping;
-        t.magFilter = LinearFilter;
-        t.minFilter = LinearFilter;
-        t.generateMipmaps = false;
-        t.needsUpdate = true;
-        resolve(t);
-      },
-      undefined,
-      (err) => reject(err),
-    );
-  });
+  return loadImage(url).then((img) => textureFromImage(img, true));
 }
 
 export function textureSize(t: Texture): [number, number] {

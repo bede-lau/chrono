@@ -104,10 +104,7 @@ export async function evolveSpecimen(
   }
 }
 
-/**
- * Load public/specimens/index.json into `archive`. If nothing is on screen yet, also loads the newest specimen
- * (so the stage is never empty on first paint).
- */
+/** Load the archive list only. Opening a specimen is always an explicit user action. */
 export async function loadArchive(): Promise<void> {
   let list: ArchiveIndex["specimens"] = [];
   try {
@@ -118,13 +115,6 @@ export async function loadArchive(): Promise<void> {
   }
   const st = useChrono.getState();
   st.setArchive(list);
-  if (!st.specimen && list.length && st.mode === "idle") {
-    try {
-      await loadSpecimen(list[0].id);
-    } catch (e) {
-      st.pushLog({ level: "warn", msg: `could not load ${list[0].id}: ${(e as Error).message}` });
-    }
-  }
 }
 
 /** Fetch /specimens/<id>/manifest.json, put it on screen (setSpecimen) and return it. */

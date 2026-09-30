@@ -40,7 +40,7 @@ export function SpecimenIdentity({ compact = false }: { compact?: boolean }) {
           transition={T}
           className="flex items-baseline gap-2 whitespace-nowrap"
         >
-          <span className="text-[12.5px] font-medium tracking-[-0.005em] text-fg-1">{name ?? "No specimen"}</span>
+          <span className="text-[12.5px] font-medium tracking-[-0.005em] text-fg-1">{name ?? "New specimen"}</span>
           {generation != null && (
             <span className="font-mono text-[11px] tabular text-fg-3">
               {compact ? "G" : "Gen "}

@@ -110,7 +110,12 @@ export const STAGE_ORDER: StageId[] = STAGES.map((s) => s.id);
 const ENGINE: Record<StageId, string> = Object.fromEntries(STAGES.map((s) => [s.id, s.engineId])) as Record<StageId, string>;
 export const SEED_SIZE = 32;
 export const LUT_RESOLUTION = 48;
-export const MASK_BASELINE = 0.35;
+/**
+ * Wound-mask floor: every part of the body ages a little. Low, so a wound reads clearly against it (live blur-v1, 4 wounds,
+ * 32×32 skin: wound cores change ≈7.8× more than the unwounded body at 0.15, only ≈2.5× at the old 0.35) but never 0 — Atlas can
+ * reject a blank upload, and blur-v1 treats mask values under `mask_bin_size` (default 4 % ≈ 10/255) as background.
+ */
+export const MASK_BASELINE = 0.15;
 /** entanglement-shader-v1 21-qubit budget, measured 2026-09-26: max incoming_rays per layer count. */
 const SHADER_MAX_RAYS: Record<number, number> = { 1: 10, 2: 9, 3: 8, 4: 8 };
 const QRC_FAST_TIMEOUT_MS = 8 * 60_000;
@@ -521,7 +526,7 @@ async function decoherence(ctx: Ctx, h: StageHandle): Promise<StageResult> {
   patch(ctx, { tissue: { url, assetId: output.output_asset_id, width: tissueImg.width, height: tissueImg.height } });
   patchMetrics(ctx, { entropy: m.entropy, meanLuma: m.meanLuma, hueSkew: m.hueSkew, qubitsUsed: (ctx.s.metrics?.qubitsUsed ?? 0) + Math.ceil(Math.log2(Math.max(W, H))) * 2 });
   return {
-    note: `strength ${fx(params.strength)} ← decay ${fx(decay)} · reach ${fx(params.reach)} ← entanglement ${fx(entanglement)} · mask ${wounds.length} wound${wounds.length === 1 ? "" : "s"} + ${baseline} baseline · skin ${reuploaded ? "re-uploaded" : `chained as output asset ${imageAsset.slice(0, 8)}`} → tissue entropy ${fx(m.entropy)} bits, mean luma ${fx(m.meanLuma)}`,
+    note: `strength ${fx(params.strength)} ← decay ${fx(decay)} · reach ${fx(params.reach)} ← entanglement ${fx(entanglement)} · mask ${wounds.length} wound${wounds.length === 1 ? "" : "s"} (great-circle Gaussians, round on the blob) + ${baseline} baseline · skin ${reuploaded ? "re-uploaded" : `chained as output asset ${imageAsset.slice(0, 8)}`} → tissue entropy ${fx(m.entropy)} bits, mean luma ${fx(m.meanLuma)}`,
   };
 }
 

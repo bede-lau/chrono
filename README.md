@@ -2,6 +2,8 @@
 
 A living, evolving quantum organism in the browser, computed across **8 Moth Atlas engines in strict daisy-chain sequence**. Each engine consumes the previous output. The user orbits it, touches it (each touch is a decoherence wound), and evolves it in real time. Built for **Moth Hack 2026 · Intermediate · Challenge 06 "Daisy Chain"**.
 
+**Live demo:** [chrono.bedelau59.chatgpt.site](https://chrono.bedelau59.chatgpt.site)
+
 ---
 
 ## The 8-Engine Chain
@@ -30,7 +32,7 @@ A living, evolving quantum organism in the browser, computed across **8 Moth Atl
 7. **Sonification**: QRC Audio vocoder derives a vocabulary from LUT rows (each row → pitch/timbre slot). Seeds with genome bits, modulates by entanglement strength. Result: a song unique to this organism.
 8. **Quantum echo**: Retrocausal Echo applies multi-tap quantum delay (n_sites = num qubits, depth from circuit) to the song. What the user hears is this echo.
 
-**Interact**: Click the organism to paint a decoherence wound. Adjust sliders (Circuit Depth, Entanglement, Decoherence). Press **Evolve** to re-run stages 3–7 with the new parameters. Organism visibly reacts; sound changes.
+**Interact**: Start at **New specimen** and press **Create** to grow one. Once loaded, touch the organism to add decoherence wounds, adjust parameters, then press **Evolve** to rerun stages 3–7. The shared **Parameters | Evolution** panel explains each engine in plain English. Its **Chrono Lens** lets you scrub an engine’s contribution, compare both hemispheres, and reveal diagnostic overlays on the organism.
 
 ---
 
@@ -48,7 +50,7 @@ cp .env.example .env.local
 npm run dev
 
 # Open http://localhost:3000
-# Click "New Specimen" or load from archive
+# The app opens at New specimen; press Create, or choose a specimen from the archive
 ```
 
 **Grow a specimen from the command line:**
@@ -93,7 +95,7 @@ Chrono/
 │   │   │   └── Waveform.tsx        # Waveform display for voice/echo
 │   │   └── ui/
 │   │       ├── ChainRail.tsx       # 8-node chain status rail
-│   │       ├── Inspector.tsx       # Stage details slide-over
+│   │       ├── RightPanel.tsx      # Parameters and Evolution views
 │   │       ├── Controls.tsx        # Sliders + buttons
 │   │       ├── Telemetry.tsx       # FPS, qubits, latency, log
 │   │       └── ...
@@ -154,27 +156,27 @@ All 8 engines publicly documented at [mothquantum.com](https://www.mothquantum.c
 
 ## UI/UX
 
-**Design**: Black stage (`#050506`), organism is the only colour. Hairline UI (1px borders, white at variable alpha). Geist Sans for text, Geist Mono for telemetry. No explanatory text; short labels only. **Motion**: 200–400 ms ease-out.
+**Design**: Black stage (`#050506`), organism is the only colour. Hairline UI, Geist Sans, and Geist Mono for telemetry. Concise plain-English engine explanations appear in Evolution. **Motion**: 200–400 ms ease-out.
 
 **Desktop layout**:
 - **Top-left**: Wordmark, specimen identity, genome barcode.
 - **Top-right**: Audio toggle (with spectrum), archive, capture, info.
-- **Right**: Sliders (Circuit Depth, Entanglement, Decoherence), machine segmented (Ideal/Fez), Evolve badge (wound count), New Specimen.
+- **Right**: One Parameters | Evolution panel. Parameters has Circuit Depth, Entanglement, Decoherence and machine controls; Evolution has engine explanations, the Chrono Lens, artifact preview and run details. Footer action reads Create when blank and Evolve when a specimen is loaded.
 - **Bottom**: Daisy chain rail (8 nodes, linked line, status indicators, clickable).
-- **Inspector**: Right slide-over (click any node) showing stage details, artifacts, coupling notes, job id, latency, attempts.
+- **Evolution view**: Stage selection switches the shared panel immediately and links the engine’s artifact to its visible effect on the organism.
 - **Bottom-left**: Telemetry (FPS, qubits, active engine, entropy Δ), expandable log.
 
-**Mobile** (<768 px): Chain rail horizontal scroll, inspector bottom sheet, controls in sheet.
+**Mobile** (<768 px): Horizontally scrollable chain rail, one Parameters | Evolution bottom sheet, and a pinned primary action.
 
 **Interaction**:
-- **Space**: Evolve (re-run stages 3–7 with current sliders).
-- **N**: New specimen (re-run entire chain, 0–7).
+- **Space**: Run the primary action (Create when blank, Evolve when loaded).
+- **N**: Reset to New specimen; nothing runs until Create.
 - **M**: Mute audio.
-- **1–8**: Inspect stage (focus chain node).
-- **Click organism**: Paint decoherence wound (raycast hit), triggers evolve.
-- **Esc**: Close inspector.
+- **1–8**: Open that stage in Evolution.
+- **Click organism**: Paint a decoherence wound; press Evolve to run stages 3–7.
+- **Esc**: Return to Parameters.
 
-**On load**: Show newest archived specimen instantly. No empty screen.
+**On load**: Start blank at New specimen. The archive list loads, but no specimen opens until selected.
 
 ---
 
@@ -183,8 +185,8 @@ All 8 engines publicly documented at [mothquantum.com](https://www.mothquantum.c
 | Criterion | Execution |
 |---|---|
 | **Number of engines** | 8 (all publicly available Moth engines). |
-| **Effective use** | Strict mathematical coupling: each output feeds next input via `output_asset_id`. Notes field documents numerical derivations (e.g., "absorption 0.71 ← entropy 5.68 bits"). Inspector displays notes for judge review. |
-| **Quality** | 60 FPS viewport, zero audio clipping, immediate feedback on all interactions. Hairline UI. Organism as focal point. |
+| **Effective use** | Strict mathematical coupling: each output feeds next input via `output_asset_id`. Notes field documents numerical derivations (e.g., "absorption 0.71 ← entropy 5.68 bits"). Evolution shows notes for judge review. |
+| **Quality** | GPU-rendered viewport, checked audio headroom, immediate interaction feedback and responsive layout. Hairline UI; organism as focal point. |
 | **Originality** | Procedural life from Born-rule quantum measurements + quantum circuits. No training, no scraped data. User decoherence wounds evolve organism in real time. |
 
 ---
@@ -201,17 +203,17 @@ All 8 engines publicly documented at [mothquantum.com](https://www.mothquantum.c
 
 ## Known Latencies (Measured at Hackathon)
 
-- **Comet QRNG**: ~8 s (12 qubits × 4096 shots)
-- **Graph**: ~8 s (circuit design + tomography)
+- **Comet QRNG**: ~11–15 s (12 qubits × 4096 shots)
+- **Graph**: ~5–6 s (circuit design + tomography)
 - **Tessa** (32×32, `aer`): 30 s – 2 min (sometimes retryable timeout at ~63 s)
-- **Tessa** (32×32, `fake_fez`): 10–15 min (science mode, higher accuracy)
+- **Tessa** (32×32, `fake_fez`): up to 10–15 min (IBM Fez noise simulation)
 - **Blur**: ~7 s (diffusion)
 - **Blur-Core**: ~4 s (displacement)
-- **Entanglement Shader**: ~60 s (LUT computation)
-- **QRC Audio**: ~5 s (synthesis)
-- **Retrocausal Echo**: ~2 s (delay effect)
+- **Entanglement Shader**: ~19–165 s (LUT computation)
+- **QRC Audio**: ~17–21 s (synthesis)
+- **Retrocausal Echo**: ~9–11 s (delay effect)
 
-**Total first grow (aer)**: ~30–45 min. **Evolve (stages 3–7 only)**: ~2–5 min. Use pre-grown archive for instant demo.
+**Measured first grows (32×32, aer)**: ~2.5–3.5 min. **Evolve (stages 3–7 only)**: ~1–4 min. Engine load and retries can make either much slower; larger Tessa jobs have taken over 30 minutes. Choose a pre-grown archive specimen for an instant demo.
 
 ---
 
@@ -222,8 +224,11 @@ All 8 engines publicly documented at [mothquantum.com](https://www.mothquantum.c
 npm run dev        # http://localhost:3000
 npm run build      # vinext build (Cloudflare Workers bundle, used by the hosting setup)
 npm run build:next # standard Next.js build (use this on Vercel)
-npm run lint       # Type-check + linting
+npm run lint       # ESLint source checks
+npx tsc --noEmit   # TypeScript checks (run npx next typegen first in a fresh checkout)
 ```
+
+Round 2 verification and repeatable browser checks are documented in [docs/ROUND2-QA.md](docs/ROUND2-QA.md).
 
 **Deployment**:
 - Needs a server runtime (the browser reaches Atlas through the `/api/moth/*` proxy). Hosting config for Cloudflare Workers is in `vite.config.ts` / `.openai/hosting.json`.

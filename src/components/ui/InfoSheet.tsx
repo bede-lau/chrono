@@ -2,24 +2,25 @@
 import { useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { STAGES } from "@/lib/chain/types";
-import { useChrono } from "@/lib/store";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { openStage } from "./actions";
 import { pad2 } from "./format";
 import { PanelClose } from "./Panel";
 import { Kbd, T } from "./primitives";
 import { useUi } from "./uiStore";
 
 const KEYS: [string, string][] = [
-  ["Space", "Evolve"],
+  ["Space", "Create · Evolve"],
   ["N", "New"],
+  ["1–8", "Engine"],
+  ["← →", "Step"],
+  ["P", "Parameters"],
   ["M", "Mute"],
-  ["1–8", "Inspect"],
-  ["Esc", "Close"],
+  ["Esc", "Back"],
 ];
 
 function Sheet({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  const selectStage = useChrono((s) => s.selectStage);
   useFocusTrap(ref, true);
 
   return (
@@ -60,10 +61,7 @@ function Sheet({ onClose }: { onClose: () => void }) {
             <li key={s.id}>
               <button
                 type="button"
-                onClick={() => {
-                  onClose();
-                  selectStage(s.id);
-                }}
+                onClick={() => openStage(s.id)}
                 className="grid h-9 w-full grid-cols-[24px_1fr_auto] items-center gap-2 rounded-[9px] px-3 text-left transition-colors duration-200 hover:bg-white/[0.05]"
               >
                 <span className="font-mono text-[10.5px] tabular text-fg-3">{pad2(s.index + 1)}</span>

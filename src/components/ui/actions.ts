@@ -1,9 +1,10 @@
 "use client";
 /**
  * UI actions over the chain controller: one run at a time, abortable, errors surfaced as toasts with Retry.
+ * Also the right panel's navigation (Parameters | Evolution, stage choice, follow mode).
  */
-import { STAGES, type Specimen, type StageId } from "@/lib/chain/types";
-import { evolveSpecimen, growSpecimen, loadArchive, loadSpecimen } from "@/lib/chain/controller";
+import { STAGES, type ArchiveIndex, type Specimen, type StageId } from "@/lib/chain/types";
+import { evolveSpecimen, growSpecimen, loadSpecimen } from "@/lib/chain/controller";
 import { unlockAudioContext } from "@/lib/audio/player";
 import { useChrono } from "@/lib/store";
 import { captureOrganismBlob, captureOrganismPng } from "./deps";
@@ -14,6 +15,9 @@ let abort: AbortController | null = null;
 
 export const isBusy = () => useUi.getState().running !== null || useChrono.getState().mode !== "idle";
 
+/** Evolve needs what genesis → morphogenesis produced; anything less (none, or a stopped Create) means Create. */
+export const canEvolve = (s: Specimen | null = useChrono.getState().specimen) => !!(s?.genome && s.colony && s.skin);
+
 const isAbort = (e: unknown) => e instanceof DOMException && e.name === "AbortError";
 
 function failedStageTitle(e: unknown): string | null {
@@ -23,10 +27,13 @@ function failedStageTitle(e: unknown): string | null {
   return failed?.title ?? null;
 }
 
-/** After a stop, nothing should keep spinning on the rail. */
+/** After a stop nothing keeps spinning, and the stage that was interrupted reads idle, not failed. */
 function settleActiveRuns() {
   const st = useChrono.getState();
-  for (const s of STAGES) if (isActive(st.runs[s.id]?.status)) st.setRun(s.id, { status: "idle" });
+  for (const s of STAGES) {
+    const r = st.runs[s.id];
+    if (isActive(r?.status) || (r?.status === "failed" && r.error === "aborted")) st.setRun(s.id, { status: "idle", error: undefined });
+  }
   if (st.mode !== "idle") st.setMode("idle", null);
 }
 
@@ -60,15 +67,15 @@ async function exclusive(kind: "grow" | "evolve", body: (signal: AbortSignal) =>
   }
 }
 
-export function newSpecimen() {
+/** Create: grow a brand-new specimen from genesis with the current controls. */
+export function create() {
   const { controls } = useChrono.getState();
-  useChrono.getState().selectStage(null);
-  void exclusive("grow", async (signal) => growSpecimen(controls, signal), newSpecimen);
+  void exclusive("grow", (signal) => growSpecimen(controls, signal), create);
 }
 
 export function evolve() {
   const { specimen, pendingWounds, controls } = useChrono.getState();
-  if (!specimen) return;
+  if (!specimen || !canEvolve(specimen)) return;
   const wounds = pendingWounds.slice();
   void exclusive(
     "evolve",
@@ -78,9 +85,110 @@ export function evolve() {
   );
 }
 
+/** The one primary action: Create until there is a specimen to build on, Evolve afterwards. */
+export function primary() {
+  if (isBusy()) return;
+  if (canEvolve()) evolve();
+  else create();
+}
+
 export function stop() {
   abort?.abort();
 }
+
+/** Back to the blank "New specimen" state. Keeps the slider values; never grows by itself. */
+export function newSpecimen() {
+  if (isBusy() || !useChrono.getState().specimen) return;
+  useChrono.getState().resetToNew();
+  const ui = useUi.getState();
+  ui.setFollow(false);
+  ui.setLastStage(null);
+  ui.setTab("parameters");
+}
+
+/* ---------------------------------------------------------------- right panel navigation */
+
+/** Show the right panel: desktop uncovers it (Archive/Info give way), mobile opens the sheet. */
+function revealPanel() {
+  const ui = useUi.getState();
+  if (ui.mobile) {
+    if (ui.panel !== "sheet") ui.openPanel("sheet");
+  } else if (ui.panel) ui.openPanel(null);
+}
+
+/** Stage the Evolution view shows: the chosen one, else the running one, else 01. */
+export function viewStage(): StageId {
+  const st = useChrono.getState();
+  return st.selectedStage ?? st.activeStage ?? STAGES[0].id;
+}
+
+/** A manual stage choice (rail, keys, stepper, link chip): that engine's Evolution view, at once. Ends follow mode. */
+export function openStage(id: StageId, reveal = true) {
+  const ui = useUi.getState();
+  ui.setFollow(false);
+  if (ui.tab !== "evolution") ui.setTab("evolution");
+  if (useChrono.getState().selectedStage !== id) useChrono.getState().selectStage(id);
+  if (reveal) revealPanel();
+}
+
+/** The Evolution toggle: back to the engine you were reading (else the running one, else 01). */
+export function openEvolution(reveal = true) {
+  openStage(useChrono.getState().selectedStage ?? useUi.getState().lastStage ?? viewStage(), reveal);
+}
+
+/** Parameters: no engine is open any more (the rail drops its selection, the lens switches off). */
+export function openParameters(reveal = true) {
+  const ui = useUi.getState();
+  const st = useChrono.getState();
+  ui.setFollow(false);
+  if (st.selectedStage) {
+    ui.setLastStage(st.selectedStage);
+    st.selectStage(null);
+  }
+  if (ui.tab !== "parameters") ui.setTab("parameters");
+  if (reveal) revealPanel();
+}
+
+/** Previous / next engine in the chain (clamped: the chain has a first and a last link). */
+export function stepStage(d: -1 | 1) {
+  const i = STAGES.findIndex((s) => s.id === viewStage());
+  const next = STAGES[Math.min(STAGES.length - 1, Math.max(0, i + d))];
+  if (next) openStage(next.id, false);
+}
+
+/** EvolutionView's Pin: keep this stage, stop following. */
+export function pinStage() {
+  useUi.getState().setFollow(false);
+}
+
+/**
+ * Follow mode. A new run (mode leaves "idle") switches the panel to Evolution and tracks `activeStage` until the
+ * user makes a manual choice; when the run ends the panel stays on the last stage. Returns the unsubscribe.
+ */
+export function watchRuns(): () => void {
+  return useChrono.subscribe((s, prev) => {
+    if (s.mode === prev.mode && s.activeStage === prev.activeStage) return;
+    const started = prev.mode === "idle" && s.mode !== "idle";
+    const ended = prev.mode !== "idle" && s.mode === "idle";
+    // Deferred out of the store notification (no re-entrant set), still before the next paint.
+    queueMicrotask(() => {
+      const ui = useUi.getState();
+      if (started) {
+        ui.setFollow(true);
+        ui.setTab("evolution");
+        if (ui.panel === "archive") ui.openPanel(null);
+      }
+      if (ended) {
+        ui.setFollow(false);
+        return;
+      }
+      const st = useChrono.getState();
+      if (st.mode !== "idle" && useUi.getState().follow && st.activeStage && st.selectedStage !== st.activeStage) st.selectStage(st.activeStage);
+    });
+  });
+}
+
+/* ---------------------------------------------------------------- specimens */
 
 export async function openSpecimen(id: string) {
   if (isBusy()) return;
@@ -88,8 +196,11 @@ export async function openSpecimen(id: string) {
   ui.setRunning("load");
   try {
     const s = await loadSpecimen(id);
-    if (s && useChrono.getState().specimen?.id !== s.id) useChrono.getState().setSpecimen(s);
-    useChrono.getState().clearWounds();
+    const st = useChrono.getState();
+    if (s && st.specimen?.id !== s.id) st.setSpecimen(s);
+    st.clearWounds();
+    // The sliders describe the specimen on screen: adopt the controls it was grown with, so nothing reads "pending".
+    if (s?.controls) st.setControls({ ...s.controls });
   } catch (e) {
     ui.toast({
       kind: "error",
@@ -102,33 +213,31 @@ export async function openSpecimen(id: string) {
   }
 }
 
+let listing: Promise<void> | null = null;
+/** public/specimens/index.json → `archive`. The list only: opening one is always the user's choice. */
+export function loadArchiveList(): Promise<void> {
+  listing ??= (async () => {
+    try {
+      const res = await fetch("/specimens/index.json", { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      useChrono.getState().setArchive(((await res.json()) as ArchiveIndex).specimens ?? []);
+    } catch {
+      listing = null; // the drawer retries when it opens; Create never needs the archive
+    }
+  })();
+  return listing;
+}
+
 let booted = false;
-/** On mount: archive, then the newest specimen, so something is alive on screen immediately. */
+/** On mount: the archive list only. Every visit starts at "New specimen"; nothing runs until the user asks. */
 export async function bootstrap() {
   if (booted) return;
   booted = true;
-  try {
-    await loadArchive();
-    if (!useChrono.getState().specimen) {
-      const newest = [...useChrono.getState().archive].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-      if (newest) await openSpecimen(newest.id);
-    }
-  } catch {
-    useUi.getState().toast({
-      kind: "error",
-      title: "Archive unavailable",
-      action: {
-        label: "Retry",
-        run: () => {
-          booted = false;
-          void bootstrap();
-        },
-      },
-    });
-  } finally {
-    useUi.getState().setBooted(true);
-  }
+  await loadArchiveList();
+  useUi.getState().setBooted(true);
 }
+
+/* ---------------------------------------------------------------- capture + audio */
 
 function download(href: string, filename: string) {
   const a = document.createElement("a");

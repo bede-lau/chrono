@@ -31,7 +31,8 @@ let voiceB: Voice | null = null;
 let activeIsA = true;
 
 let currentUrl: string | null = null;
-let bufferCache = new Map<string, AudioBuffer>();
+let playbackRequestId = 0;
+const bufferCache = new Map<string, AudioBuffer>();
 let enabled = false;
 
 const CROSSFADE_SEC = 2.0;
@@ -117,15 +118,36 @@ function equalPowerCurve(steps: number, rising: boolean): Float32Array {
   return curve;
 }
 
-/** Load a WAV url, loop it, and crossfade (2s, equal-power) from whatever was previously playing. */
-export function setUrl(url: string): void {
+/** Stop the specimen loop when cleared; otherwise load a WAV and crossfade from the previous loop. */
+export function setUrl(url: string | null): void {
   if (url === currentUrl) return;
   currentUrl = url;
+  const requestId = ++playbackRequestId;
+
+  if (!url) {
+    if (ctx && voiceA && voiceB) {
+      const now = ctx.currentTime;
+      for (const voice of [voiceA, voiceB]) {
+        voice.gain.gain.cancelScheduledValues(now);
+        voice.gain.gain.setTargetAtTime(0, now, 0.025);
+        const source = voice.source;
+        voice.source = null;
+        try {
+          source?.stop(now + 0.1);
+        } catch {
+          // A source may already have stopped as its crossfade completed.
+        }
+      }
+    }
+    activeIsA = true;
+    return;
+  }
+
   const context = ensureAudioContext();
   if (!context || !voiceA || !voiceB) return;
 
   void loadBuffer(url).then((buffer) => {
-    if (!buffer || !ctx || url !== currentUrl || !voiceA || !voiceB) return;
+    if (!buffer || !ctx || url !== currentUrl || requestId !== playbackRequestId || !voiceA || !voiceB) return;
 
     const incoming = activeIsA ? voiceB : voiceA;
     const outgoing = activeIsA ? voiceA : voiceB;

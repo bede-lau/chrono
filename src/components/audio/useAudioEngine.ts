@@ -28,7 +28,7 @@ export function useAudioEngine(): UseAudioEngine {
   }, [audioEnabled]);
 
   useEffect(() => {
-    if (url) setUrl(url);
+    setUrl(url);
   }, [url]);
 
   useEffect(() => {

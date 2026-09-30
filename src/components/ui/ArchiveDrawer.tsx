@@ -1,7 +1,8 @@
 "use client";
+import { useEffect } from "react";
 import Image from "next/image";
 import { useChrono } from "@/lib/store";
-import { openSpecimen } from "./actions";
+import { loadArchiveList, openSpecimen } from "./actions";
 import { formatDate } from "./format";
 import { Panel, PanelClose } from "./Panel";
 import { cx } from "./primitives";
@@ -16,6 +17,11 @@ export function ArchiveDrawer({ mobile }: { mobile: boolean }) {
   const { busy } = useRunProgress();
   const close = () => openPanel(null);
   const sorted = [...archive].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  // The list loads on boot; if that failed (offline), try again whenever the drawer opens.
+  useEffect(() => {
+    if (open && useChrono.getState().archive.length === 0) void loadArchiveList();
+  }, [open]);
 
   return (
     <Panel open={open} onClose={close} label="Archive" mobile={mobile}>
@@ -43,8 +49,9 @@ export function ArchiveDrawer({ mobile }: { mobile: boolean }) {
                     aria-current={current ? "true" : undefined}
                     aria-label={`${s.name}, generation ${s.generation}${current ? ", on screen" : ""}`}
                     onClick={() => {
+                      // Picking one hands the stage back to the panel at once (it reads Evolve when the specimen lands).
+                      close();
                       if (!current) void openSpecimen(s.id);
-                      if (mobile) close();
                     }}
                     className="group block w-full rounded-[12px] text-left disabled:cursor-not-allowed disabled:opacity-40"
                   >

@@ -78,7 +78,6 @@ export default function OrganismLab() {
   // auto-grow: step through the lifecycle
   useEffect(() => {
     if (!autoGrow) return;
-    setStage(0);
     let s = 0;
     const id = window.setInterval(() => {
       s += 1;
@@ -171,7 +170,7 @@ export default function OrganismLab() {
             ))}
           </Row>
           <Row>
-            <button onClick={() => setAutoGrow(true)} style={btn(autoGrow)}>
+            <button onClick={() => { setStage(0); setAutoGrow(true); }} style={btn(autoGrow)}>
               Auto-grow
             </button>
             <button onClick={() => setSeed((s) => s + 1)} style={btn(false)} disabled={source !== "procedural"}>

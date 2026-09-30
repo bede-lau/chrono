@@ -21,8 +21,15 @@ export { encodePng, decodePng, pngDataUrl } from "./png";
  */
 export { renderColonySeed } from "./colony";
 
-/** Wound mask for blur-v1 (same WxH as the image it masks). White = full decoherence. Soft radial falloff, u wraps. Base level `baseline` (0..1) everywhere so the whole organism ages a little. */
-export { renderWoundMask } from "./mask";
+/**
+ * Wound mask for blur-v1 (same WxH as the image it masks). White = full decoherence. Wounds are Gaussians in
+ * GREAT-CIRCLE distance on the sphere (round on the blob), v = 1 north = TOP row (see `Wound`), u wraps, soft-union
+ * combine, `baseline` (0..1) floor everywhere so the whole organism ages a little. `woundSigma` = a wound's radius (rad).
+ */
+export { renderWoundMask, woundSigma } from "./mask";
+
+/** Equirectangular <-> sphere helpers, exact inverses: v = 1 north = top row; pixel (px,py) is at u=(px+.5)/W, v=1-(py+.5)/H. */
+export { uvToDir, dirToUv, angleBetween } from "./sphere";
 
 /** Downsample luminance to an N x N grid, normalised 0..1 (for blur-core-v1 `values`). */
 export { lumaGrid, imageMetrics } from "./analysis";

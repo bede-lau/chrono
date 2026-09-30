@@ -16,7 +16,9 @@ export function TopBar({ compact = false }: { compact?: boolean }) {
     <header
       className={cx(
         "pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3",
-        compact ? "px-4 pt-[calc(var(--safe-top)+12px)]" : "px-6 pt-[calc(var(--safe-top)+20px)]",
+        compact
+          ? "pt-[calc(var(--safe-top)+12px)] pr-[calc(var(--safe-right)+16px)] pl-[calc(var(--safe-left)+16px)]"
+          : "pt-[calc(var(--safe-top)+20px)] pr-[calc(var(--safe-right)+24px)] pl-[calc(var(--safe-left)+24px)]",
       )}
     >
       <div className={cx("pointer-events-auto flex min-w-0 items-start", compact ? "gap-3" : "gap-4")}>

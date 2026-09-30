@@ -20,9 +20,9 @@ Challenge 06 · Daisy Chain (Intermediate)
 
 ## 4. Project description
 
-<!-- Word count: 196 -->
+<!-- Word count: 226 -->
 
-Chrono is a browser app that grows a specimen through eight Moth Atlas quantum engines, run in strict sequence, and renders the result as a touchable organism. Touching it paints a decoherence wound that reruns the back half of the chain, aging the specimen further.
+Chrono is a browser app that grows a specimen through eight Moth Atlas quantum engines, run in strict sequence, and renders the result as a touchable organism. The first visit starts at New specimen; pressing Create grows it. Touching a loaded specimen paints a decoherence wound, and Evolve reruns the back half of the chain. A shared Parameters | Evolution panel explains each engine, while the Chrono Lens isolates its visible effect on the organism.
 
 Each specimen leaves behind eight artifacts, one per stage: a 256-bit genome measured from Born-rule shot counts, a 32x32 colony seed image (qubit Bloch vectors as cell nuclei), a Tessa quantum skin from a color-sphere encode/measure/decode cycle, a blurred and aged tissue map, a non-local displacement field, a set of iridescence lookup tables with their GLSL shader, a reservoir-sequenced WAV song, and a retrocausal echo WAV that is what actually plays. Five specimens are committed under public/specimens with full manifests, including one evolved generation carrying wound scars and one grown on IBM's Fez noise model instead of the ideal simulator.
 
@@ -65,15 +65,15 @@ https://github.com/bede-lau/chrono
 
 ## 9. Demo URL
 
-`TBD`
+[https://chrono.bedelau59.chatgpt.site](https://chrono.bedelau59.chatgpt.site)
 
-Needs a server runtime: the Atlas API's CORS policy allows only `http://localhost:3000` as a browser origin, so the app cannot be hosted as a static, client-only build; the Next.js proxy routes that hold the API key must keep running server-side wherever this is deployed.
+The deployed app uses a server runtime for the `/api/moth/*` proxy; the API key stays server-side.
 
 ---
 
 ## 10. Generative AI usage
 
-Yes. The code was written with Claude Code agents; no generative AI produced the organism's images or sound, which come from the Atlas engines and procedural code.
+Yes. The code was written with Claude Code and Codex agents; no generative AI produced the organism's images or sound, which come from the Atlas engines and procedural code.
 
 ---
 
@@ -103,9 +103,10 @@ poster.png (organism render, 4:3 aspect ratio).
 
 ## 15. Additional images
 
-- Chain rail with the inspector open, showing a stage's coupling note and job id.
+- Chain rail with Evolution open, showing a stage's coupling note and job id.
 - Membrane close-up showing LUT-driven iridescence at a grazing camera angle.
-- Wound sequence: tissue before touch, the painted wound mask, tissue after re-aging.
+- Wound sequence: tissue before touch, the spherical north-up wound mask, tissue after re-aging.
+- Chrono Lens comparison showing Without/With and an engine diagnostic overlay on the organism.
 - Archive grid of the five committed specimens, generation and hue labels visible.
 - Mobile layout: horizontally scrollable chain rail with the bottom-sheet controls open.
 

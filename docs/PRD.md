@@ -23,11 +23,11 @@
 
 ## Coupling Derivations
 
-**Pipeline agent implements; every run stores a one-line `note` with the actual numbers (e.g., `"absorption 0.71 ← tissue entropy 5.68 bits"`). The inspector shows it; this is how judges see "effective use":**
+**Pipeline agent implements; every run stores a one-line `note` with the actual numbers (e.g., `"absorption 0.71 ← tissue entropy 5.68 bits"`). Evolution run details show it; this is how judges see "effective use":**
 
 - **Colony**: `seed = uint32(genome[0..3])`, `num_qubits = 6 + (genome[4] % 5)` (6–10), `shots 1024`, `mode "emu"`, `coupling_map` = ring + chords where genome bits are set.
 - **Morphogenesis**: `machine = controls.machine` (default `aer`; `fake_fez` = IBM Fez noise model), `shots 1024`.
-- **Decoherence**: `strength = 0.25 + 0.6·decay`, `reach = 0.8·entanglement`, `style = rx` (ry collapses gradients), mask = wounds painted at UV (+ baseline 0.35 so the whole body ages).
+- **Decoherence**: `strength = 0.25 + 0.6·decay`, `reach = 0.8·entanglement`, `style = rx` (ry collapses gradients), mask = spherical great-circle wound Gaussians with north-up UVs (`v=1` is the top image row), plus a 0.15 baseline so the whole body ages.
 - **Soma**: `values = lumaGrid(tissue, 32)`, `strength = 0.3 + 0.5·entanglement`, `reach = entanglement`, `style "xy"`.
 - **Membrane**: `reflectance = clamp(0.08 + 0.6·meanLuma, .05, .9)`, `absorption = clamp(entropy/8, .1, .98)`, `layers = 1 + round(3·normVariance)` (1–4), `incoming_rays = layers + 4 + genome[5] % 4` (respect 21-qubit budget), `interaction = clamp(2·hueSkew, -2, 2)` (sign → distinct pattern), `style` by entropy bucket (<3 `3-body`, <5 `peaked`, <6.5 `frustrated`, else `constrained`), `resolution 48`.
 - **Voice**: `length 16`, `quality "fast"` (fallback `"instant"` on timeout), `seed = uint32(genome[8..11])`, `variation = 0.6 + entanglement`, `crossfade 120`, `loop true`.
@@ -39,20 +39,28 @@
 
 ## UX Specification
 
-**Design language:** Near-black stage (`#050506`) with soft radial vignette; organism is the only saturated colour. UI monochrome: white at 90/60/40/12/6 % alpha, hairline 1px borders `white/8%`, 10–12 px uppercase labels (0.14em tracking), Geist Sans for UI, Geist Mono for numbers/ids. Accent = `--specimen-hue` (set from colony's dominant nucleus hue) used only for active stage glow and primary button focus ring. Motion: 200–400 ms ease-out, no bounces; chain rail pulse travels as artifacts hand over. **No paragraphs of explanatory text anywhere.** Short labels only.
+### Round 2 interaction model
+- New sessions start with `specimen = null`, an embryo, idle stages and Parameters selected. Bootstrap loads the archive list only; no specimen opens and no chain runs automatically.
+- The primary action reads **Create** when blank and **Evolve** when a specimen exists. New specimen resets to blank and keeps slider values. Archive loading is explicit. Space invokes the current primary action; N resets; M toggles audio; 1–8 opens Evolution for that stage; Esc returns to Parameters.
+- A single right panel (mobile bottom sheet) switches immediately between **Parameters** and **Evolution**. Evolution follows the running stage until the user manually chooses another. Its order is stage header and gist, plain-English “What it does”, “On the organism” with lens controls, engine-specific controls, smooth artifact preview, and collapsible run details. Before Create, it remains documentation and shows “Waiting for Create” in the artifact area.
+- The Chrono Lens reveals each engine’s contribution on the same blob through a Without/With scrubber, hemisphere comparison and diagnostic overlay. Stage selection activates its lens; Parameters resets it. A linked probe connects artifact previews with positions on the organism. Controls preview live on the blob and changed values remain marked pending until Evolve.
+- The mask uses spherical great-circle wound Gaussians. Wound coordinates use `v = 1` for the north pole/top image row, so image consumers map to `row = (1-v)·height`. The baseline stays non-zero for Atlas input, with stronger wound contrast.
+- Plain-English engine explanations live with stage copy and describe both the engine’s role in the chain and its visible contribution. Decoherence, Soma and Membrane effects must read clearly on the organism.
+
+**Design language:** Near-black stage (`#050506`) with soft radial vignette; organism is the only saturated colour. UI monochrome: white at 90/60/40/12/6 % alpha, hairline 1px borders `white/8%`, 10–12 px uppercase labels (0.14em tracking), Geist Sans for UI, Geist Mono for numbers/ids. Accent = `--specimen-hue` (set from colony's dominant nucleus hue) used only for active stage glow and primary button focus ring. Motion: 200–400 ms ease-out, no bounces; chain rail pulse travels as artifacts hand over. The visual interface stays restrained. The Evolution view includes concise plain-English engine explanations so users can understand each stage.
 
 **Layout (desktop):**
 - **Top-left**: Wordmark **Chrono**, specimen identity (`Specimen 7F3A · Gen 3`), genome strip (256 bits as hairline barcode).
 - **Top-right**: Audio toggle (with live mini spectrum), archive, capture (PNG), info.
-- **Right**: Compact controls card — sliders **Circuit Depth** (1–12), **Entanglement** (0–1), **Decoherence** (0–1); segmented **Ideal / IBM Fez noise** (machine). Primary **Evolve** (badge = pending wound count), secondary **New Specimen**.
-- **Bottom**: **Daisy chain rail** — 8 nodes linked by line: index, stage title, engine name, status (idle · running spinner · retrying n/6 · done ✓ + latency · cached · failed). Click → Inspector.
-- **Inspector** (right slide-over; bottom sheet on mobile): Stage title, engine name + id, consumes → produces, artifact itself (genome bit grid; colony nuclei + seed PNG pixelated; skin; tissue + mask; soma heightmap; LUT heatmaps + GLSL; waveform + play for voice/echo), coupling `note`, params sent, job id (copy), latency, attempts.
+- **Right**: Compact controls card — sliders **Circuit Depth** (1–12), **Entanglement** (0–1), **Decoherence** (0–1); segmented **Ideal / IBM Fez noise** (machine). One Parameters | Evolution panel. Footer action is **Create** when blank, **Evolve** when loaded (pending wound badge only for Evolve); New specimen resets a loaded specimen to blank.
+- **Bottom**: **Daisy chain rail** — 8 nodes linked by line: index, stage title, engine name, status (idle · running spinner · retrying n/6 · done ✓ + latency · cached · failed). Selecting a stage opens its Evolution view in the right panel.
+- **Evolution view** in the shared panel (bottom sheet on mobile): stage title, engine name + id, gist, plain-English explanation, visible effect on organism and lens controls, engine controls, smooth artifact preview, then collapsible coupling note, params, job id, latency and attempts.
 - **Bottom-left**: Telemetry in mono — fps, qubits, active engine, last latency, entropy Δ; expandable log.
-- **First run**: One fading hint near organism: "Touch to decohere". Dismiss on first touch.
+- **Touch hint**: Show “Touch to decohere” only when a specimen exists.
 - **Growing**: Organism starts translucent embryo, gains each property as stage lands (nuclei → skin → aging → shape → iridescence → breath with sound).
-- **Keys**: Space evolve · N new specimen · M mute · 1–8 inspect stage · Esc close.
+- **Keys**: Space primary action · N new specimen · M mute · 1–8 open Evolution stage · Esc return to Parameters.
 - **Mobile** (<768 px): Rail becomes horizontally scrollable compact strip; controls in bottom sheet.
-- **On load**: Show newest archived specimen instantly (from `public/specimens`), never empty screen.
+- **On load**: Start at New specimen with no specimen selected; load only the archive list. Nothing runs until Create is pressed.
 
 ---
 
@@ -61,11 +69,11 @@
 ### Viewport & Interaction
 
 - **3D Canvas**: Full-window Three.js/WebGL viewport, organism suspended in dark stage.
-- **Decoherence Click**: Click organism surface → raycast hit → paint wound mask at UV → re-run stages 3–7. Touch strength encoded in wound opacity.
-- **Mutation Sliders**: Real-time UI controls for Circuit Depth, Entanglement, Decoherence (fed into coupling derivations on evolve, not live).
+- **Decoherence Click**: With a specimen loaded, click the surface → raycast UV → paint a spherical great-circle wound mask (north-up image convention) → Evolve stages 3–7. A click records a wound; the primary action starts the run.
+- **Mutation Sliders**: Circuit Depth, Entanglement and Decoherence preview on the organism immediately; new values are pending until Evolve.
 - **Audio Monitor**: Toggle playback; live mini spectrum analyzer; waveform display for voice/echo stages.
 - **Telemetry**: FPS, active qubits, active engine, last job latency, entropy change; expandable structured log.
-- **Inspector**: Slide-over (right on desktop, bottom sheet on mobile) showing full stage details, artifacts (as PNG/heatmap/waveform), coupling notes, params, job id, latencies, retry count.
+- **Evolution view**: Shared right panel view showing plain-English stage explanations, Chrono Lens, artifacts, coupling notes, params, job id, latency and retry count.
 - **Archive**: Load pre-grown specimens from `public/specimens/` (instant load, resilience against Tessa timeout).
 - **Capture**: Export current organism frame as PNG (timestamp-named, stored locally or downloaded).
 
@@ -109,7 +117,7 @@
 | Entanglement Shader returns BSDF LUTs not geometry | API spec: shader outputs R/T LUTs as ZIP (Radiance HDR); geometry moved to Blur Core (displacement grid). |
 | Atlas Audio Engine doesn't exist; use QRC Audio + Retrocausal Echo | QRC-audio-v1 synthesizes from LUT vocabulary; Retrocausal Echo applies quantum multi-tap delay to song. |
 | Added Comet QRNG + Quantum Graph genesis stages | From Born-rule measurements → genome seed, then genetic algorithm for coupling ring topology. |
-| Archive of pre-grown specimens in `public/specimens` | Hackathon load + Tessa latency; pre-computed set ensures instant load + graceful fallback if grow fails. |
+| Archive of pre-grown specimens in `public/specimens` | Hackathon load + Tessa latency; pre-computed specimens provide an explicit fast-load option and fallback if Create fails. |
 | Server-side proxy (`/api/moth/*`) required | CORS: browser can only hit `localhost:3000`; key safety enforced. |
 | Geometry via blur-core displacement + antipodal coupling in vertex shader | Blur Core outputs nested array (displacements); EntanglementShader params (via vertex shader) apply sign-flipped vertex offset to antipodal pairs. |
 | Audio vocabulary synthesized from LUT rows | Sound depends on membrane state (LUT reflectance/absorption rows → pitch/timbre mapping). |

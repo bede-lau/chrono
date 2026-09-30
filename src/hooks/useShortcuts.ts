@@ -2,11 +2,12 @@
 import { useEffect, useRef } from "react";
 
 export interface ShortcutHandlers {
-  evolve: () => void; // Space
+  primary: () => void; // Space: Create / Evolve
   newSpecimen: () => void; // N
   toggleMute: () => void; // M
   inspect: (index: number) => void; // 1–8 → 0..7
-  step?: (delta: -1 | 1) => void; // ← / → while a stage is inspected
+  parameters: () => void; // P
+  step?: (delta: -1 | 1) => void; // ← / →
   escape: () => void; // Esc
 }
 
@@ -21,14 +22,25 @@ function isTextEntry(el: Element | null): boolean {
   return !(el.tagName === "INPUT" && ["range", "checkbox", "radio", "button"].includes(type));
 }
 
-/** Space/arrows already mean something on buttons, links and sliders. */
-function ownsSpaceOrArrows(el: Element | null): boolean {
+/**
+ * Space activates a focused control — but only when the focus came from the keyboard. A control that merely kept
+ * focus after a mouse click/tap gives Space back to the app, so "Space = Create / Evolve" holds for everyone.
+ * (`:focus-visible` can't tell: Chrome turns it on for the focused element as soon as any key is pressed.)
+ */
+function ownsSpace(el: Element | null, pointerFocused: Element | null): boolean {
+  if (!el || el === document.body || el === pointerFocused) return false;
+  return !!el.closest("button, a[href], summary, [role='button'], [role='tab'], [role='radio'], [role='switch'], [role='checkbox']");
+}
+
+/** Arrow keys only mean something on value/choice widgets (not on plain buttons). */
+function ownsArrows(el: Element | null): boolean {
   if (!el || el === document.body) return false;
-  return !!el.closest("button, a[href], input, select, textarea, summary, [role='button'], [role='slider'], [role='radio'], [role='tab']");
+  return !!el.closest("input, select, textarea, [role='slider'], [role='radio'], [role='radiogroup'], [role='tab'], [role='tablist'], [role='listbox'], [role='menu']");
 }
 
 /**
- * Global keyboard shortcuts: Space evolve · N new specimen · M mute · 1–8 inspect stage · ←/→ step · Esc close.
+ * Global keyboard shortcuts: Space create/evolve · N new specimen · M mute · 1–8 engine · P parameters ·
+ * ←/→ step engines · Esc back/close.
  */
 export function useShortcuts(handlers: ShortcutHandlers) {
   const ref = useRef(handlers);
@@ -37,6 +49,16 @@ export function useShortcuts(handlers: ShortcutHandlers) {
   });
 
   useEffect(() => {
+    // Which element (if any) received focus from a pointer press rather than from the keyboard.
+    let lastPointer = -Infinity;
+    let pointerFocused: Element | null = null;
+    const onPointer = () => {
+      lastPointer = performance.now();
+    };
+    const onFocusIn = (e: FocusEvent) => {
+      pointerFocused = performance.now() - lastPointer < 800 ? (e.target as Element) : null;
+    };
+
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing) return;
       const h = ref.current;
@@ -49,12 +71,12 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       if (e.metaKey || e.ctrlKey || e.altKey || isTextEntry(target)) return;
 
       if (e.code === "Space" || e.key === " ") {
-        if (ownsSpaceOrArrows(target) || e.repeat) return;
+        if (ownsSpace(target, pointerFocused)) return;
         e.preventDefault();
-        h.evolve();
+        if (!e.repeat) h.primary();
         return;
       }
-      if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && h.step && !ownsSpaceOrArrows(target)) {
+      if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && h.step && !ownsArrows(target)) {
         e.preventDefault();
         h.step(e.key === "ArrowLeft" ? -1 : 1);
         return;
@@ -67,12 +89,21 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       } else if (k === "m") {
         e.preventDefault();
         h.toggleMute();
+      } else if (k === "p") {
+        e.preventDefault();
+        h.parameters();
       } else if (/^[1-8]$/.test(e.key)) {
         e.preventDefault();
         h.inspect(Number(e.key) - 1);
       }
     };
+    window.addEventListener("pointerdown", onPointer, true);
+    window.addEventListener("focusin", onFocusIn, true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointer, true);
+      window.removeEventListener("focusin", onFocusIn, true);
+      window.removeEventListener("keydown", onKey);
+    };
   }, []);
 }

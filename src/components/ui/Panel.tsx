@@ -5,7 +5,10 @@ import { X } from "lucide-react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { ICON, IconButton, T, cx } from "./primitives";
 
-/** Desktop: floating right slide-over between the top bar and the rail. Mobile: bottom sheet with scrim. */
+/**
+ * Desktop: floating right drawer in the right panel's frame (non-modal: focus moves in, Tab may leave).
+ * Mobile: modal bottom sheet with scrim and a focus trap.
+ */
 export function Panel({
   open,
   onClose,
@@ -34,7 +37,7 @@ export function Panel({
 
 function PanelInner({ onClose, label, mobile, children, className }: { onClose: () => void; label: string; mobile: boolean; children: ReactNode; className?: string }) {
   const ref = useRef<HTMLElement>(null);
-  useFocusTrap(ref, true);
+  useFocusTrap(ref, true, mobile);
 
   return (
     <>
@@ -63,7 +66,7 @@ function PanelInner({ onClose, label, mobile, children, className }: { onClose: 
           "pointer-events-auto fixed z-40 flex flex-col overflow-hidden glass-strong shadow-2xl shadow-black/60",
           mobile
             ? "inset-x-0 bottom-0 mx-auto max-h-[84dvh] max-w-[560px] rounded-t-[22px] border-b-0 pb-[var(--safe-bottom)]"
-            : "top-[72px] right-5 bottom-[var(--rail-clearance)] w-[380px] rounded-[18px]",
+            : "top-[72px] right-6 bottom-[var(--rail-clearance)] w-[344px] rounded-[18px]",
           className,
         )}
       >

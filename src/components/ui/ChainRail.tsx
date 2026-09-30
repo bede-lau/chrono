@@ -4,8 +4,10 @@ import { motion } from "motion/react";
 import { Check, X } from "lucide-react";
 import { STAGES, type StageMeta, type StageRun, type StageStatus } from "@/lib/chain/types";
 import { useChrono } from "@/lib/store";
+import { openStage } from "./actions";
 import { MAX_ATTEMPTS, formatElapsed, formatLatency, isActive, isComplete, pad2, statusText } from "./format";
 import { EASE_OUT, cx } from "./primitives";
+import { selectEvolutionVisible, useUi } from "./uiStore";
 
 /* ---------------------------------------------------------------- marker */
 
@@ -23,8 +25,19 @@ function Marker({ status, selected }: { status: StageStatus; selected: boolean }
         style={{ boxShadow: "0 0 16px 2px var(--accent-soft)", background: "radial-gradient(circle, var(--accent-faint), transparent 70%)" }}
       />
       <svg viewBox="0 0 18 18" width={18} height={18} className="relative overflow-visible" aria-hidden>
-        {selected && <circle cx="9" cy="9" r="8.25" fill="none" stroke="white" strokeOpacity="0.35" strokeWidth="1" />}
-        {status === "idle" && <circle cx="9" cy="9" r="4" fill="var(--bg)" stroke="white" strokeOpacity="0.28" strokeWidth="1" />}
+        {/* Selected = open in the Evolution view: a crisp ring that stays until another engine is chosen. */}
+        <circle
+          cx="9"
+          cy="9"
+          r="8.5"
+          fill="none"
+          stroke="white"
+          strokeWidth="1.25"
+          className="transition-[stroke-opacity] duration-150 ease-out"
+          strokeOpacity={selected ? 0.8 : 0}
+        />
+        {/* Before Create every link is an empty, hollow socket: quiet on purpose, not missing. */}
+        {status === "idle" && <circle cx="9" cy="9" r="3.75" fill="var(--bg)" stroke="white" strokeOpacity={selected ? 0.7 : 0.3} strokeWidth="1" />}
         {active && (
           <>
             <circle cx="9" cy="9" r="5.25" fill="var(--bg)" stroke="white" strokeOpacity="0.14" strokeWidth="1.25" />
@@ -111,7 +124,8 @@ function StatusLine({ run }: { run?: StageRun }) {
     case "uploading":
       return <span className={cx(base, "text-fg-2")}>{s === "queued" ? "Queued" : "Uploading"}</span>;
     default:
-      return <span className={cx(base, "text-fg-4")}>—</span>;
+      // Idle: nothing to report yet. Keep the line's height so the rail never shifts when a run starts.
+      return <span aria-hidden className={cx(base, "h-[14px]")} />;
   }
 }
 
@@ -166,7 +180,7 @@ const Node = memo(function Node({
       <button
         type="button"
         onClick={() => onSelect(stage.id)}
-        aria-label={`${pad2(stage.index + 1)} ${stage.title}, ${stage.engineName}: ${statusText(run)}. Open inspector`}
+        aria-label={`${pad2(stage.index + 1)} ${stage.title}, ${stage.engineName}: ${statusText(run)}`}
         aria-current={selected ? "true" : undefined}
         aria-keyshortcuts={String(stage.index + 1)}
         className={cx(
@@ -214,8 +228,10 @@ function announce(stage: StageMeta, run: StageRun): string | null {
 
 export function ChainRail({ compact = false }: { compact?: boolean }) {
   const runs = useChrono((s) => s.runs);
-  const selected = useChrono((s) => s.selectedStage);
-  const selectStage = useChrono((s) => s.selectStage);
+  const selectedStage = useChrono((s) => s.selectedStage);
+  // A node reads "selected" exactly while the panel shows that engine's Evolution view.
+  const viewing = useUi(selectEvolutionVisible);
+  const selected = viewing ? selectedStage : null;
   const [pulses, setPulses] = useState<number[]>(() => STAGES.map(() => 0));
   const [message, setMessage] = useState("");
   const scroller = useRef<HTMLOListElement>(null);
@@ -269,7 +285,7 @@ export function ChainRail({ compact = false }: { compact?: boolean }) {
               selected={selected === stage.id}
               compact={compact}
               link={link}
-              onSelect={(id) => selectStage(selected === id ? null : id)}
+              onSelect={openStage}
             />
           );
         })}

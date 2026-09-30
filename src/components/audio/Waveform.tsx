@@ -16,9 +16,10 @@ export default function Waveform({ url, className }: { url: string; className?: 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const peaksRef = useRef<Float32Array | null>(null);
   const rafRef = useRef(0);
-  const [playing, setPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [ready, setReady] = useState(false);
+  const [playback, setPlayback] = useState({ url: "", playing: false, progress: 0 });
+  const [loadVersion, setLoadVersion] = useState(0);
+  const playing = playback.url === url && playback.playing;
+  const progress = playback.url === url ? playback.progress : 0;
 
   const draw = () => {
     const canvas = canvasRef.current;
@@ -58,12 +59,9 @@ export default function Waveform({ url, className }: { url: string; className?: 
 
   useEffect(() => {
     let cancelled = false;
-    setReady(false);
-    setProgress(0);
     peaksRef.current = null;
     audioRef.current?.pause();
     audioRef.current = null;
-    setPlaying(false);
 
     (async () => {
       try {
@@ -84,7 +82,7 @@ export default function Waveform({ url, className }: { url: string; className?: 
           peaks[i] = max;
         }
         peaksRef.current = peaks;
-        setReady(true);
+        setLoadVersion((version) => version + 1);
       } catch {
         // leave the canvas blank on fetch/decode failure
       }
@@ -98,7 +96,7 @@ export default function Waveform({ url, className }: { url: string; className?: 
   useEffect(() => {
     draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, progress]);
+  }, [loadVersion, progress, url]);
 
   useEffect(() => {
     const onResize = () => draw();
@@ -114,12 +112,15 @@ export default function Waveform({ url, className }: { url: string; className?: 
     }
     const audio = audioRef.current;
     const step = () => {
-      if (audio && audio.duration) setProgress(audio.currentTime / audio.duration);
+      if (audio && audio.duration) {
+        const nextProgress = audio.currentTime / audio.duration;
+        setPlayback((current) => current.url === url ? { ...current, progress: nextProgress } : current);
+      }
       rafRef.current = requestAnimationFrame(step);
     };
     rafRef.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [playing]);
+  }, [playing, url]);
 
   useEffect(
     () => () => {
@@ -133,18 +134,17 @@ export default function Waveform({ url, className }: { url: string; className?: 
     if (!audioRef.current) {
       const audio = new Audio(url);
       audio.addEventListener("ended", () => {
-        setPlaying(false);
-        setProgress(0);
+        setPlayback({ url, playing: false, progress: 0 });
       });
       audioRef.current = audio;
     }
     const audio = audioRef.current;
     if (playing) {
       audio.pause();
-      setPlaying(false);
+      setPlayback({ url, playing: false, progress: audio.duration ? audio.currentTime / audio.duration : 0 });
     } else {
       void audio.play().catch(() => {});
-      setPlaying(true);
+      setPlayback({ url, playing: true, progress: audio.duration ? audio.currentTime / audio.duration : 0 });
     }
   };
 
