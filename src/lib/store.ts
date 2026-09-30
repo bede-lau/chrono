@@ -8,7 +8,10 @@
 import { create } from "zustand";
 import {
   DEFAULT_CONTROLS,
+  LENS_OFF,
   type Controls,
+  type LensState,
+  type Probe,
   type LogLine,
   type Specimen,
   type StageId,
@@ -38,7 +41,15 @@ export interface ChronoState {
   audioLevel: number;
   fps: number;
   log: LogLine[];
+  /** Chrono Lens: which engine's effect the organism is currently showcasing (see types.ts). */
+  lens: LensState;
+  /** Linked hover point shared between the organism and the panel's 2D previews. */
+  probe: Probe | null;
 
+  setLens: (p: Partial<LensState>) => void;
+  setProbe: (p: Probe | null) => void;
+  /** Back to the blank "New specimen" state (keeps the mutation controls). */
+  resetToNew: () => void;
   setSpecimen: (s: Specimen | null) => void;
   patchSpecimen: (p: Partial<Specimen>) => void;
   setArchive: (a: ArchiveIndex["specimens"]) => void;
@@ -68,7 +79,13 @@ export const useChrono = create<ChronoState>((set) => ({
   audioLevel: 0,
   fps: 0,
   log: [],
+  lens: LENS_OFF,
+  probe: null,
 
+  setLens: (p) => set((s) => ({ lens: { ...s.lens, ...p } })),
+  setProbe: (probe) => set({ probe }),
+  resetToNew: () =>
+    set({ specimen: null, runs: {}, pendingWounds: [], mode: "idle", activeStage: null, selectedStage: null, lens: LENS_OFF, probe: null }),
   setSpecimen: (specimen) => set({ specimen, runs: specimen?.runs ?? {} }),
   patchSpecimen: (p) => set((s) => (s.specimen ? { specimen: { ...s.specimen, ...p } } : {})),
   setArchive: (archive) => set({ archive }),

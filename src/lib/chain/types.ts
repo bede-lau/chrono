@@ -74,7 +74,7 @@ export const DEFAULT_CONTROLS: Controls = { circuitDepth: 8, entanglement: 0.45,
 /** A decoherence event: user clicked the organism at this UV. */
 export interface Wound {
   u: number; // 0..1
-  v: number; // 0..1
+  v: number; // 0..1 latitude: 1 = NORTH pole = TOP row of every texture/mask image (same as three.js uv.y and the shader's dirToUv)
   strength: number; // 0..1
   t: number; // epoch ms
 }
@@ -180,4 +180,34 @@ export interface LogLine {
   stage?: StageId;
   level: "info" | "ok" | "warn" | "error";
   msg: string;
+}
+
+/**
+ * Chrono Lens (round 2): isolates ONE engine's contribution on the living organism so cause and effect are visible.
+ * Written by the UI (evolution panel), read by the viewport.
+ */
+export interface LensState {
+  /** Engine whose effect is being showcased on the blob; null = lens off (organism shows everything applied). */
+  stage: StageId | null;
+  /** 0 = organism WITHOUT this engine's contribution -> 1 = fully WITH it. The viewport eases toward this. */
+  amount: number;
+  /** Compare: hemisphere wipe across the blob — one side without the engine, the other with it. */
+  compare: boolean;
+  /** Draw the engine's diagnostic overlay on the surface (wound heat + scars / soma contours + entangled links / membrane angle bands ...). */
+  overlay: boolean;
+}
+export const LENS_OFF: LensState = { stage: null, amount: 1, compare: false, overlay: true };
+
+/**
+ * A shared point of interest between the 3D organism and the 2D artifact previews in the panel (linked hover):
+ * hover the blob -> crosshair on the artifact previews; hover a preview -> ring on the blob.
+ */
+export interface Probe {
+  u: number; // 0..1 longitude
+  v: number; // 0..1 latitude, 1 = north pole (same convention as Wound)
+  source: "blob" | "panel"; // who set it
+  /** blob-sourced only: incidence angle at that point, 0..PI/2 (LUT row axis) */
+  theta?: number;
+  /** blob-sourced only: LUT phase coordinate s for R,G,B in [0,1) (LUT column axis) */
+  phase?: [number, number, number];
 }
