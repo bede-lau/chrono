@@ -14,7 +14,6 @@ import {
   InstancedBufferGeometry,
   Matrix3,
   Matrix4,
-  NormalBlending,
   RepeatWrapping,
   ShaderMaterial,
   SphereGeometry,
@@ -599,7 +598,10 @@ export class OrganismRig {
       fragmentShader: shellsFragment,
       transparent: true,
       depthWrite: false,
-      blending: NormalBlending,
+      // Instanced transparent meshes cannot be depth-sorted tap by tap. Additive
+      // ghosts are order-independent, so a moving high-depth Echo cannot mask the
+      // real organism or flash as instance depths cross.
+      blending: AdditiveBlending,
       side: FrontSide,
       uniforms: {
         ...shared,

@@ -8,7 +8,7 @@
  *   compact    mobile bottom sheet (tighter spacing)
  *   following  true while the panel is auto-following the RUNNING stage during Create/Evolve.
  *              In that mode the view must NOT set the Chrono Lens (leave it off so the growth reveal plays);
- *              show a small "Live" pill and a "Pin" button that calls onPin.
+ *              show a "Pin" button that calls onPin.
  *   onPin      the shell stops following and keeps this stage; the view then owns the lens for `stage`.
  *
  * Layout: the view brings its own horizontal gutters (20 px, 16 px compact) and full-bleed hairlines between
@@ -32,7 +32,6 @@ import {
   CompactContext,
   CopyValue,
   Disclosure,
-  LivePill,
   ParamSlider,
   PendingMark,
   PinButton,
@@ -110,8 +109,7 @@ function StageHeader({ stage, following, onPin }: { stage: StageId; following: b
   return (
     <header className={cx(gutter(compact), compact ? "pt-2 pb-4" : "pt-4 pb-5")}>
       {following && (
-        <div className="-mr-1.5 mb-2.5 flex items-center justify-between gap-3">
-          <LivePill />
+        <div className="-mr-1.5 mb-2.5 flex justify-end">
           <PinButton onPin={onPin} />
         </div>
       )}

@@ -323,16 +323,6 @@ export function StatusPill({ run }: { run?: StageRun }) {
   );
 }
 
-/** "Live": the panel is following the running engine. */
-export function LivePill() {
-  return (
-    <span className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 text-[10.5px] font-medium tracking-[0.08em] text-fg-1 uppercase">
-      <span aria-hidden className="breathe size-1.5 rounded-full bg-accent" />
-      Live
-    </span>
-  );
-}
-
 /** Quiet text button that stops following and keeps this engine on screen. */
 export function PinButton({ onPin }: { onPin?: () => void }) {
   return (

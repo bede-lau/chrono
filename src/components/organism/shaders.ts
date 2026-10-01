@@ -853,12 +853,18 @@ void main() {
   vec3 P = surfaceAt(d, s, f, q);
   float n = max(uShellCount, 1.0);
   float ph = fract(uTime * uShellRate + aShell / n);
-  P *= 1.02 + ph * (0.12 + 0.42 * uShellOv);
+  // Each delay tap enters and leaves at zero opacity.  Keep its travel just outside
+  // the body: a large full-body copy reads as a render fault rather than an echo.
+  float travel = smoothstep(0.0, 0.82, ph);
+  P *= 1.018 + travel * (0.055 + 0.11 * uShellOv);
   vec4 mv = modelViewMatrix * vec4(P, 1.0);
   vN = normalize(normalMatrix * d);
   vV = normalize(-mv.xyz);
-  float env = smoothstep(0.0, 0.12, ph) * pow(1.0 - ph, 1.5);
-  vA = env * step(aShell + 0.5, n) * max(uGhost * mix(uLEcho.x, uLEcho.y, s), uShellOv * s);
+  float env = smoothstep(0.0, 0.18, ph) * (1.0 - smoothstep(0.62, 0.98, ph));
+  // A twelve-tap circuit must not become twelve times brighter than a one-tap
+  // circuit. This also keeps the stationary organism readable at high depth.
+  float tap = 1.0 / n;
+  vA = env * tap * step(aShell + 0.5, n) * max(uGhost * mix(uLEcho.x, uLEcho.y, s), uShellOv * s);
   vDark = mod(aShell, 2.0);
   gl_Position = projectionMatrix * mv;
 }
@@ -877,10 +883,10 @@ void main() {
   float ndv = clamp(abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0);
   float rim = pow(1.0 - ndv, 2.2);
   float line = pow(1.0 - ndv, 8.0);
-  float a = vA * (0.04 + 0.5 * rim + uShellOv * 0.9 * line);
+  float a = min(vA * (0.025 + 0.22 * rim + uShellOv * 0.25 * line), 0.12);
   bool dark = vDark > 0.5;
-  vec3 c = dark ? vec3(0.004, 0.006, 0.014) : mix(uHue, vec3(0.8, 0.88, 1.0), 0.62) * 1.3;
-  a *= dark ? 0.85 : 1.0;
+  vec3 c = dark ? vec3(0.035, 0.06, 0.12) : mix(uHue, vec3(0.8, 0.88, 1.0), 0.62) * 1.1;
+  a *= dark ? 0.55 : 1.0;
   if (a < 0.002) discard;
   gl_FragColor = vec4(c, a);
   #include <colorspace_fragment>

@@ -1,6 +1,6 @@
 # Chrono — Status & Handover (SOURCE OF TRUTH)
 
-**Last updated:** 2026-09-30, final-form rendering fix.
+**Last updated:** 2026-10-01, Echo stability follow-up.
 Read order: this file → `docs/BRIEF.md` → `decisions.md` → `docs/PRD.md` → `AGENTS.md`. Round 2 requirements are in `docs/ROUND2.md`; verification details are in `docs/ROUND2-QA.md`.
 
 ## ROUND 2: COMPLETE
@@ -36,13 +36,21 @@ Headless screenshots use software WebGL and do not establish a GPU frame-rate be
 - ✅ Next build, Worker build, lint and TypeScript pass. `scripts/qa/brand.mjs` verifies served assets, icon dimensions, ICO frames, social metadata and desktop/360px layout against the built Worker with no engine calls. Lab noindex also verified in server HTML.
 - Design rationale, exports and the generation prompt: `docs/BRAND.md`. Rebuild exports with `node scripts/generate-brand.mjs`. No packages added; no Atlas credits spent for branding checks.
 
-## Final-form flicker: fixed
+## Initial black-frame fault: fixed
 
 - ✅ Critic reproduced whole-stage disappearance on the public site/Apple GPU and isolated it to Echo shells. UI/canvas lifecycle and specimen data were intact.
 - ✅ Clamp Echo's normalized dot to `[0, 1]` before fractional Fresnel powers; GPU rounding could otherwise produce invalid colour/alpha and contaminate compositing/bloom. Replaced two signed Gaussian powers with multiplication as additional shader hardening.
 - ✅ Controlled WebKit/Apple GPU A/B: removing only the clamp recreated the black frame (mean centre brightness 0.0586/255); the fixed renderer passed 2,700 sampled frames in 15 states over three final specimens, with all centre pixels lit. Critic separately watched Echo, Membrane Compare and Soma overlays remain stable. Existing 363 surface regressions pass.
 - ✅ TypeScript, lint, Next production build and deployment Worker build pass.
 - Evidence, test commands and scope: `docs/FLICKER-QA.md`; repeatable temporal test: `scripts/qa/flicker.mjs`. No npm dependencies or Atlas calls added. The Playwright WebKit browser binary was downloaded for hardware-backed regression testing.
+
+## Echo surface flashing: fixed
+
+- The user supplied `glitch.mp4`: a close view of Specimen 4C42 with Echo ghosts and Echo shells enabled. Unlike the earlier black frame, pale overlapping copies wash over the visible organism. The earlier centre-pixel test did not detect this kind of flashing.
+- ✅ Additive, order-independent Echo blending, tap-count-normalized/capped opacity and bounded, smoothly fading shell travel keep the body readable. The previous Fresnel clamp remains intact.
+- ✅ Apple GPU A/B: restoring old Echo rendering fails body-colour and halo-brightness checks; fixed depth-12 rendering passes 180 frames. Close views at one/twelve taps and high audio activity also pass. The 51-check free journey, 2,700-frame visibility regression and 363 surface checks pass. Diagnosis and commands: `docs/ECHO-STABILITY-QA.md`.
+- ✅ Removed the Evolution panel's LIVE pill. Browser smoke confirms following still shows Pin, Pin stops following, and no Atlas calls are made.
+- ✅ TypeScript, lint and Next production build pass. No dependencies added or Atlas credits spent.
 
 ## Historical verification
 

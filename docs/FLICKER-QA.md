@@ -1,4 +1,6 @@
-# Final-form disappearance: diagnosis and verification
+# Initial black-frame fault: diagnosis and verification
+
+This records the 2026-09-30 fix for invalid shader arithmetic. The later `glitch.mp4` report showed a separate Echo transparency problem: the body stayed lit while overlapping pale shells flashed over it. Centre-pixel visibility alone did not cover that problem. The follow-up diagnosis and checks are in `ECHO-STABILITY-QA.md`.
 
 2026-09-30. A browser QA critic observed the published app on the actual Apple GPU. After loading `42ac05-g1` and opening Echo, the entire WebGL stage went black and then returned about 2.5 seconds later. UI controls stayed present. Echo Dry (0%) remained stable, isolating the shell rendering path.
 
