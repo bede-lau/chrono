@@ -106,11 +106,15 @@ function StageHeader({ stage, following, onPin }: { stage: StageId; following: b
   const run = useChrono((s) => s.runs[stage]);
   const hasSpecimen = useChrono((s) => !!s.specimen);
   const showStatus = hasSpecimen || (run && run.status !== "idle");
+  // Use the former Live-pill slot for active work so the status does not crowd the engine title.
+  const statusInTopRow = !!run && (following ? isActive(run.status) : run.status === "running");
+  const showTopRow = following || statusInTopRow;
   return (
     <header className={cx(gutter(compact), compact ? "pt-2 pb-4" : "pt-4 pb-5")}>
-      {following && (
-        <div className="-mr-1.5 mb-2.5 flex justify-end">
-          <PinButton onPin={onPin} />
+      {showTopRow && (
+        <div className="-mr-1.5 mb-2.5 flex items-center justify-between gap-3">
+          {statusInTopRow && <StatusPill run={run} />}
+          {following && <PinButton onPin={onPin} />}
         </div>
       )}
       <div className="flex items-start justify-between gap-3">
@@ -121,7 +125,7 @@ function StageHeader({ stage, following, onPin }: { stage: StageId; following: b
           </span>
           {meta.title}
         </h2>
-        {showStatus && (
+        {showStatus && !statusInTopRow && (
           <div className="pt-0.5">
             <StatusPill run={run} />
           </div>
