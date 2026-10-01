@@ -14,8 +14,8 @@
  * Layout: the view brings its own horizontal gutters (20 px, 16 px compact) and full-bleed hairlines between
  * sections, and does not scroll itself — mount it edge to edge inside the panel's scroll container.
  *
- * Order: 1 stage header · 2 What it does · 3 On the organism (+ Chrono Lens) · 4 the engine's controls ·
- * 5 artifacts (linked probe) · 6 Run details (collapsed).
+ * Order: 1 stage header · 2 artifacts (linked probe) · 3 What it does · 4 On the organism (+ Chrono Lens) ·
+ * 5 engine controls · 6 Run details (collapsed).
  *
  * Lens: on mount / stage change → setLens({ stage, amount 1, compare off, overlay on }); unmount → LENS_OFF.
  * While `following`, the lens is kept off. Only the instance that last wrote the lens resets it on unmount, so a
@@ -370,21 +370,6 @@ export function EvolutionView({ stage, compact = false, following = false, onPin
       <div className="flex flex-col" data-evolution-stage={stage}>
         <StageHeader stage={stage} following={following} onPin={onPin} />
 
-        <Section label="What it does">
-          <p className="text-[13px] leading-[1.55] text-fg-1">{copy.what}</p>
-        </Section>
-
-        <Section label="On the organism">
-          <p className="text-[13px] leading-[1.55] text-fg-1">{copy.onBlob}</p>
-          <LensControls stage={stage} available={lensReady} reason={specimen ? "Available once this engine finishes" : "Available after Create"} onLens={onLens} />
-        </Section>
-
-        {copy.controls.length > 0 && (
-          <Section label="Controls">
-            <EngineControls keys={copy.controls} />
-          </Section>
-        )}
-
         <Section
           label="Artifacts"
           aside={
@@ -409,6 +394,21 @@ export function EvolutionView({ stage, compact = false, following = false, onPin
             />
           </div>
         </Section>
+
+        <Section label="What it does">
+          <p className="text-[13px] leading-[1.55] text-fg-1">{copy.what}</p>
+        </Section>
+
+        <Section label="On the organism">
+          <p className="text-[13px] leading-[1.55] text-fg-1">{copy.onBlob}</p>
+          <LensControls stage={stage} available={lensReady} reason={specimen ? "Available once this engine finishes" : "Available after Create"} onLens={onLens} />
+        </Section>
+
+        {copy.controls.length > 0 && (
+          <Section label="Controls">
+            <EngineControls keys={copy.controls} />
+          </Section>
+        )}
 
         <RunDetails stage={stage} />
       </div>

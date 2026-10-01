@@ -69,7 +69,12 @@ async function exclusive(kind: "grow" | "evolve", body: (signal: AbortSignal) =>
 
 /** Create: grow a brand-new specimen from genesis with the current controls. */
 export function create() {
-  const { controls } = useChrono.getState();
+  if (isBusy()) return;
+  // Start/resume Web Audio in this click's gesture and leave the user's audio preference enabled.
+  unlockAudioContext();
+  const st = useChrono.getState();
+  st.setAudioEnabled(true);
+  const { controls } = st;
   void exclusive("grow", (signal) => growSpecimen(controls, signal), create);
 }
 

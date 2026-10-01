@@ -1,6 +1,6 @@
 # Chrono — Status & Handover (SOURCE OF TRUTH)
 
-**Last updated:** 2026-10-01, Echo stability follow-up.
+**Last updated:** 2026-10-01, audio/panel/engine-workload follow-up.
 Read order: this file → `docs/BRIEF.md` → `decisions.md` → `docs/PRD.md` → `AGENTS.md`. Round 2 requirements are in `docs/ROUND2.md`; verification details are in `docs/ROUND2-QA.md`.
 
 ## ROUND 2: COMPLETE
@@ -21,6 +21,14 @@ The paused local work has been reviewed, completed and tested. The existing `rou
 | Release | Public site: https://chrono.bedelau59.chatgpt.site · GitHub: https://github.com/bede-lau/chrono. Sites deployment status identifies the currently published version. |
 
 The completion pass used Luna for mask/docs and bounded lint/audio work, Sol for UI and independent review, and Astra for viewport/shader work. Independent final review found no blocking regressions. Root owned integration, live API runs and publishing.
+
+## UX and engine workload follow-up
+
+- ✅ Create unlocks the Web Audio context in the click gesture and enables audio; playback begins once the chain produces its voice/echo artifact. Users can mute with the existing toggle.
+- ✅ Every Evolution engine panel now puts Artifacts first, immediately below its stage header.
+- ✅ Morphogenesis requests 256 shots per colour field (down from 1,024). Membrane preserves the 1–4 Soma-derived layers, caps incoming rays at 4, and requests 24×24 LUTs (down from 48×48).
+- Cause: observed rail times were 35 s for Tessa and 4:07 for Entanglement Shader. These are elapsed job times from submission through Atlas completion; polling adds only about 1–3 s. The code reduces expensive work, but Atlas queue/execution is external and a sub-20-second wall-time guarantee cannot be verified without new paid jobs.
+- ✅ `npx tsc --noEmit -p .`, `npm run lint`, `npm run build`, `npm run build:next`, the free browser journey (51/51), Create-audio browser check and Artifacts-first checks across all eight panels. No Atlas jobs were submitted.
 
 ## Current behavior
 

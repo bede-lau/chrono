@@ -109,7 +109,22 @@ export class ChainHaltedError extends Error {
 export const STAGE_ORDER: StageId[] = STAGES.map((s) => s.id);
 const ENGINE: Record<StageId, string> = Object.fromEntries(STAGES.map((s) => [s.id, s.engineId])) as Record<StageId, string>;
 export const SEED_SIZE = 32;
-export const LUT_RESOLUTION = 48;
+/**
+ * Keep the interactive chain responsive. Atlas accepts any positive shot count; 256 is a conservative
+ * fourfold reduction from the former 1,024 shots per colour field. The repository has no lower-shot
+ * quality fixture, so avoid claiming a visual-quality guarantee below this setting.
+ */
+export const TESSA_SHOTS = 256;
+/**
+ * The organism shader bilinearly samples these LUTs, so a 24×24 table remains smooth on the body
+ * while asking Atlas to generate one quarter as many table entries as the former 48×48 table.
+ */
+export const LUT_RESOLUTION = 24;
+/**
+ * Entanglement Shader cost rises sharply with each simultaneous ray. Preserve the full Soma-derived
+ * layer range, but avoid the 6–9 ray jobs that have taken minutes.
+ */
+const FAST_SHADER_MAX_RAYS = 4;
 /**
  * Wound-mask floor: every part of the body ages a little. Low, so a wound reads clearly against it (live blur-v1, 4 wounds,
  * 32×32 skin: wound cores change ≈7.8× more than the unwounded body at 0.15, only ≈2.5× at the old 0.35) but never 0 — Atlas can
@@ -457,7 +472,7 @@ async function morphogenesis(ctx: Ctx, h: StageHandle): Promise<StageResult> {
     patch(ctx, { colony: { ...col, seed: { ...col.seed, url: seedUrl, assetId: seedAsset } } });
   }
   const machine = ctx.controls.machine;
-  const params = { machine, shots: 1024 };
+  const params = { machine, shots: TESSA_SHOTS };
   const out = await h.job({ input_files: { image: seedAsset }, params });
   const { bytes, output } = await h.download(out, (o) => /^image\//.test(o.content_type) || /\.png$/i.test(o.filename), "skin image");
   const skinImg = decodePng(bytes);
@@ -470,7 +485,7 @@ async function morphogenesis(ctx: Ctx, h: StageHandle): Promise<StageResult> {
   patchMetrics(ctx, { qubitsUsed: (ctx.s.metrics?.qubitsUsed ?? 0) + 3 * fieldQubits });
   const d = meanLumaDelta(seedImg, skinImg);
   return {
-    note: `${seedImg.width}×${seedImg.height} seed → colour-sphere encode/measure/decode on ${machine === "aer" ? "aer (ideal)" : `${machine} (IBM noise model)`}, 1024 shots/field → skin ${skinImg.width}×${skinImg.height}${d != null ? ` · mean |ΔL| ${fx(d, 3)} vs seed` : ""}${retinted}`,
+    note: `${seedImg.width}×${seedImg.height} seed → colour-sphere encode/measure/decode on ${machine === "aer" ? "aer (ideal)" : `${machine} (IBM noise model)`}, ${TESSA_SHOTS} shots/field → skin ${skinImg.width}×${skinImg.height}${d != null ? ` · mean |ΔL| ${fx(d, 3)} vs seed` : ""}${retinted}`,
   };
 }
 
@@ -571,7 +586,7 @@ function shaderParams(ctx: Ctx) {
   const layers = 1 + Math.round(3 * normVariance);
   const g5 = ctx.s.genome!.bytes[5];
   const wantRays = layers + 4 + (g5 % 4);
-  const incoming_rays = Math.max(layers, Math.min(wantRays, SHADER_MAX_RAYS[layers] ?? 8));
+  const incoming_rays = Math.max(layers, Math.min(wantRays, FAST_SHADER_MAX_RAYS, SHADER_MAX_RAYS[layers] ?? 8));
   const style: MembraneArtifact["params"]["style"] = entropy < 3 ? "3-body" : entropy < 5 ? "peaked" : entropy < 6.5 ? "frustrated" : "constrained";
   const params: MembraneArtifact["params"] = {
     reflectance: round(clamp(0.08 + 0.6 * meanLuma, 0.05, 0.9)),
@@ -605,9 +620,9 @@ async function membrane(ctx: Ctx, h: StageHandle): Promise<StageResult> {
   const art: MembraneArtifact = { params, rLut: lut(z.rLut), tLut: lut(z.tLut), glsl: z.glsl };
   patch(ctx, { membrane: art });
   patchMetrics(ctx, { qubitsUsed: (ctx.s.metrics?.qubitsUsed ?? 0) + params.layers + params.incoming_rays });
-  const capped = params.incoming_rays < d.wantRays ? ` (capped from ${d.wantRays} by 21-qubit budget)` : "";
+  const rayCap = params.incoming_rays < d.wantRays ? ` (capped from ${d.wantRays} for fast generation)` : "";
   return {
-    note: `reflectance ${fx(params.reflectance)} ← mean luma ${fx(d.meanLuma)} · absorption ${fx(params.absorption)} ← entropy ${fx(d.entropy)} bits · layers ${params.layers} ← soma σ ${fx(d.sigma, 3)} · rays ${params.incoming_rays} ← layers+4+genome[5]%4${capped} · interaction ${fx(params.interaction, 2, true)} ← hue skew ${fx(d.hueSkew, 2, true)} · style ${params.style} → ${art.rLut.width}×${art.rLut.height} R/T LUTs`,
+    note: `reflectance ${fx(params.reflectance)} ← mean luma ${fx(d.meanLuma)} · absorption ${fx(params.absorption)} ← entropy ${fx(d.entropy)} bits · layers ${params.layers} ← soma σ ${fx(d.sigma, 3)} · rays ${params.incoming_rays} ← layers+4+genome[5]%4${rayCap} · interaction ${fx(params.interaction, 2, true)} ← hue skew ${fx(d.hueSkew, 2, true)} · style ${params.style} → ${art.rLut.width}×${art.rLut.height} R/T LUTs`,
   };
 }
 

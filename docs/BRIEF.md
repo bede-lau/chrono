@@ -38,14 +38,21 @@ Coupling derivations (pipeline agent implements; every run stores a one-line `no
 e.g. `"absorption 0.71 ← tissue entropy 5.68 bits"` — Evolution run details show it; this is how judges see "effective use"):
 - Colony: `seed = uint32(genome[0..3])`, `num_qubits = 6 + (genome[4] % 5)` (6–10), `shots 1024`, `mode "emu"`,
   `coupling_map` = ring + chords where genome bits are set.
-- Morphogenesis: `machine = controls.machine` (default `aer`; `fake_fez` = IBM Fez noise model), `shots 1024`.
+- Morphogenesis: `machine = controls.machine` (default `aer`; `fake_fez` = IBM Fez noise model), `shots 256` per colour field.
 - Decoherence: `strength = 0.25 + 0.6·decay`, `reach = 0.8·entanglement`, `style = rx` (ry collapses gradients),
   mask = spherical great-circle wound Gaussians painted at UV, with `v = 1` at the north pole/top image row (`row = (1-v)·height`); baseline 0.15 keeps the body aging while wounds remain visibly stronger.
 - Soma: `values = lumaGrid(tissue, 32)`, `strength = 0.3 + 0.5·entanglement`, `reach = entanglement`, `style "xy"`.
 - Membrane: `reflectance = clamp(0.08 + 0.6·meanLuma, .05, .9)`, `absorption = clamp(entropy/8, .1, .98)`,
-  `layers = 1 + round(3·normVariance)` (1–4), `incoming_rays = layers + 4 + genome[5] % 4` (respect 21-qubit budget),
+  `layers = 1 + round(3·normVariance)` (1–4), `incoming_rays = max(layers, min(layers + 4 + genome[5] % 4, 4))` (respect 21-qubit budget),
   `interaction = clamp(2·hueSkew, -2, 2)` (sign → distinct pattern), `style` by entropy bucket
-  (<3 `3-body`, <5 `peaked`, <6.5 `frustrated`, else `constrained`), `resolution 48`.
+  (<3 `3-body`, <5 `peaked`, <6.5 `frustrated`, else `constrained`), `resolution 24`.
+
+**Interactive latency tuning (2026-10-01):** the chain now sends 256 Tessa shots per field (one quarter of the former
+1,024) and caps Membrane incoming rays at 4 while preserving the 1–4 Soma-derived layers. Its LUT is 24×24 instead
+of 48×48; the organism samples it bilinearly. This targets the expensive work observed in the run rail (35 s for
+Tessa and 4:07 for Entanglement Shader). Atlas queue/execution time is outside the app's control, so these settings
+reduce requested work but cannot guarantee a sub-20-second wall time. No new paid Atlas run has been made to measure
+the new settings.
 - Voice: `length 16`, `quality "fast"` (fallback `"instant"` on timeout), `seed = uint32(genome[8..11])`,
   `variation = 0.6 + entanglement`, `crossfade 120`, `loop true`.
 - Echo: `n_sites = colony.numQubits`, `depth = circuitDepth`, `theta_x = 0.3 + 1.2·entropy/8`, `mix 0.55`,
@@ -104,7 +111,7 @@ mid-edit; only fix errors in files you own).
 - A new visitor starts with no specimen, an embryo, idle stages and Parameters selected. Bootstrap loads only the archive index; no specimen opens and no engine runs until **Create** is pressed.
 - The primary action is **Create** while no specimen is selected and **Evolve** afterwards. **New specimen** resets to the blank state while retaining parameter values. Opening the archive is an explicit user choice.
 - One right-side panel has **Parameters | Evolution** views (bottom sheet on mobile). Stage selection, keyboard shortcuts, stage links and the toggle switch views immediately. Evolution follows the active engine while a run progresses until the user manually selects a stage.
-- Evolution presents the stage gist, a plain-English “What it does” explanation, “On the organism” explanation, engine-specific controls, artifact preview, then collapsible run details (coupling note, params, job id, latency and attempts). Before Create it remains useful as documentation; artifacts show “Waiting for Create.”
+- Evolution presents the stage header, artifact preview, a plain-English “What it does” explanation, “On the organism” explanation, engine-specific controls, then collapsible run details (coupling note, params, job id, latency and attempts). Before Create it remains useful as documentation; artifacts show “Waiting for Create.”
 - The **Chrono Lens** isolates an engine’s contribution on the same organism: scrub Without ↔ With, compare hemispheres, or show a diagnostic overlay. Opening an Evolution stage selects its lens; Parameters turns the lens off. Lens overlays and reveal pulses make Decoherence scars, Soma displacement and Membrane angle bands legible on the blob. A linked probe connects blob hover to artifact previews and back.
 - Controls preview on the organism immediately; changed values are marked pending until Evolve. A completed, non-cached stage may briefly reveal its contribution unless the user is dragging.
 
@@ -117,7 +124,7 @@ Keep the interface restrained, but explain each engine in plain English in its E
 
 Layout (desktop): full-bleed canvas.
 - Top-left: wordmark **Chrono**, specimen identity `Specimen 7F3A · Gen 3`, genome strip (256 bits as a hairline barcode).
-- Top-right: audio toggle (with live mini spectrum), archive, capture (PNG), info.
+- Top-right: audio toggle (with live mini spectrum), archive, capture (PNG), info. Create unlocks and enables audio in the initiating click; the user may mute it at any time.
 - Right: one panel with **Parameters | Evolution** toggle. Parameters contains Circuit depth (1–12), Entanglement (0–1), Decoherence (0–1), and Ideal / IBM Fez noise. Footer action is **Create** for a blank state or **Evolve** for a loaded specimen; New specimen is available when one is loaded.
 - Bottom: **the daisy chain rail** — 8 nodes with stage, engine and status (idle · running · retrying · done · cached · failed). Selecting a node opens its Evolution view in the shared right panel.
 - Bottom-left: telemetry in mono — fps, qubits, active engine, last latency, entropy Δ; expandable log.
