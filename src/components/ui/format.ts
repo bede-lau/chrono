@@ -1,4 +1,5 @@
 import type { BlochVector, StageRun, StageStatus } from "@/lib/chain/types";
+import { isResumableRemoteJobError } from "@/lib/moth/job";
 
 export const pad2 = (n: number) => String(n).padStart(2, "0");
 
@@ -79,7 +80,21 @@ export const isComplete = (s?: StageStatus) => s === "done" || s === "cached";
 
 export const MAX_ATTEMPTS = 6;
 
+/** Per-stage retry budget, with the generic limit for older runs and non-customized engines. */
+export function attemptLimit(run?: StageRun): number {
+  return run?.maxAttempts ?? MAX_ATTEMPTS;
+}
+
+export function isRecoverableRun(run?: StageRun): boolean {
+  return !!run?.jobId && run.status === "failed" && isResumableRemoteJobError(run.errorType);
+}
+
+export function recoveryText(run?: StageRun): string {
+  return run?.errorType === "client_aborted" ? "Paused" : run?.errorType === "output_unavailable" || run?.errorType === "result_unavailable" ? "Recover result" : "Waiting on Atlas";
+}
+
 export function statusText(run?: StageRun): string {
+  if (isRecoverableRun(run)) return recoveryText(run);
   const s = run?.status ?? "idle";
   switch (s) {
     case "idle":
@@ -91,7 +106,7 @@ export function statusText(run?: StageRun): string {
     case "running":
       return "Running";
     case "retrying":
-      return `Retrying ${run?.attempt ?? 1}/${MAX_ATTEMPTS}`;
+      return `Retrying ${run?.attempt ?? 1}/${attemptLimit(run)}`;
     case "done":
       return run?.latencyMs != null ? formatLatency(run.latencyMs) : "Done";
     case "cached":

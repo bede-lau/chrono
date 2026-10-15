@@ -4,9 +4,11 @@
 import { ID_RE, PROXY_ENGINE_WHITELIST } from "@/lib/moth/engines";
 import { errorResponse, jsonError, noStoreJson } from "@/lib/moth/http";
 import { proxyClient } from "@/lib/moth/proxy";
+import { submitOpenAIImageJob } from "@/lib/openai/membraneJob";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 240;
 
 export async function POST(request: Request, { params }: { params: Promise<{ engineId: string }> }) {
   const { engineId } = await params;
@@ -35,10 +37,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
     return jsonError(400, "bad_params", "params must be an object", false);
   }
   try {
-    const job = await proxyClient().submit(engineId, {
+    if (engineId === "tessa-image-v1") {
+      const image = (input_files as Record<string, string> | undefined)?.image;
+      const job = await submitOpenAIImageJob(request, image, proxyClient(request));
+      const response = noStoreJson(job, 202);
+      response.headers.set("Vary", "Authorization");
+      return response;
+    }
+    const job = await proxyClient(request).submit(engineId, {
       ...(input_files ? { input_files: input_files as Record<string, string> } : {}),
       ...(engineParams ? { params: engineParams as Record<string, unknown> } : {}),
-    });
+    }, request.signal);
     return noStoreJson({ job_id: job.job_id, status: job.status, submitted_at: job.submitted_at }, 202);
   } catch (e) {
     return errorResponse(e);

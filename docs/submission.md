@@ -1,5 +1,7 @@
 # Moth Hack 2026 Submission — Chrono
 
+> **Historical submission (2026-10-15).** This document preserves the competition entry and its measurements as submitted. The current live release replaces the Tessa `tessa-image-v1` morphogenesis implementation with an OpenAI `gpt-image-2.5-flare` image edit of the real Colony seed; the normalized result is uploaded to Moth, and the other seven stages still use Moth Atlas. Accordingly, the eight-Moth-engine description, Tessa/Aer/Fez measurements, and claim that generative AI did not produce organism imagery below describe the historical submission only, not the current app.
+
 ## 1. Project title
 
 Chrono

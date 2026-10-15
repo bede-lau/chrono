@@ -4,10 +4,11 @@
  * Compact pill: speaker icon + 12-bar live mini spectrum. Toggles store.audioEnabled.
  * Monochrome, hairline, 32px tall, aria-pressed, keyboard accessible.
  */
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 import { useChrono } from "@/lib/store";
 import { getSpectrum, unlockAudioContext } from "@/lib/audio/player";
+import { useVisualTicker } from "./useVisualTicker";
 
 const BARS = 12;
 
@@ -17,9 +18,7 @@ export default function AudioToggle({ className }: { className?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dataRef = useRef(new Uint8Array(BARS));
 
-  useEffect(() => {
-    let raf = 0;
-    const draw = () => {
+  useVisualTicker(() => {
       const canvas = canvasRef.current;
       const ctx2d = canvas?.getContext("2d");
       if (canvas && ctx2d) {
@@ -48,11 +47,7 @@ export default function AudioToggle({ className }: { className?: string }) {
           ctx2d.fillRect(i * (barW + gap), h - barH, barW, barH);
         }
       }
-      raf = requestAnimationFrame(draw);
-    };
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, [audioEnabled]);
+  }, audioEnabled);
 
   return (
     <button

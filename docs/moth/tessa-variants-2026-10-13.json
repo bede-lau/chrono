@@ -1,0 +1,224 @@
+{
+  "checkedAt": "2026-10-13T12:03:10.704Z",
+  "engine": "tessa-image-v1",
+  "creditsPerRun": 1,
+  "advertisedRunPolicy": {
+    "timeout": 18000,
+    "max_retries": 1,
+    "heartbeat": 6000
+  },
+  "variants": [
+    {
+      "label": "palette-8-64",
+      "size": 8,
+      "shots": 64,
+      "palette": true,
+      "merged": false
+    },
+    {
+      "label": "merged-8-64",
+      "size": 8,
+      "shots": 64,
+      "palette": false,
+      "merged": true
+    },
+    {
+      "label": "palette-16-256",
+      "size": 16,
+      "shots": 256,
+      "palette": true,
+      "merged": false
+    },
+    {
+      "label": "palette-4-16",
+      "size": 4,
+      "shots": 16,
+      "palette": true,
+      "merged": false,
+      "diagnosticOnly": true
+    },
+    {
+      "label": "palette-floor-2-1",
+      "size": 2,
+      "shots": 1,
+      "palette": true,
+      "merged": false,
+      "diagnosticOnly": true
+    },
+    {
+      "label": "merged-floor-2-1",
+      "size": 2,
+      "shots": 1,
+      "palette": false,
+      "merged": true,
+      "diagnosticOnly": true
+    }
+  ],
+  "runs": [
+    {
+      "label": "palette-8-64",
+      "specimenId": "6a5efd",
+      "startedAt": "2026-10-13T12:03:10.708Z",
+      "dimensions": [
+        8,
+        8
+      ],
+      "inputSha256": "d0d12a60f4131ebcffe0cff5e45cda7dcd9c600d6763e717b8c5941b8e4c23b7",
+      "asset": "15892586-6050-4203-b060-bbd7d27df7f1",
+      "params": {
+        "machine": "aer",
+        "shots": 64,
+        "fixed_palette": true,
+        "separate_rgb": true,
+        "distortion": 0,
+        "range_correction": false
+      },
+      "jobId": "77f4a5cb-893f-484f-8f24-77edfaa83158",
+      "submissions": 1,
+      "elapsedMs": 64411,
+      "outcome": "failed",
+      "remoteStatus": "failed",
+      "errorType": "engine_timeout",
+      "message": "tessa-image-v1: engine_timeout: The engine did not respond in time — retry the job",
+      "pending": false
+    },
+    {
+      "label": "merged-8-64",
+      "specimenId": "6a5efd",
+      "startedAt": "2026-10-13T12:04:18.711Z",
+      "dimensions": [
+        8,
+        8
+      ],
+      "inputSha256": "d0d12a60f4131ebcffe0cff5e45cda7dcd9c600d6763e717b8c5941b8e4c23b7",
+      "asset": "15892586-6050-4203-b060-bbd7d27df7f1",
+      "params": {
+        "machine": "aer",
+        "shots": 64,
+        "fixed_palette": false,
+        "separate_rgb": false,
+        "distortion": 0,
+        "range_correction": false
+      },
+      "jobId": "0e55baf6-5a1e-4628-bd27-1b233c406268",
+      "submissions": 1,
+      "elapsedMs": 62815,
+      "outcome": "failed",
+      "remoteStatus": "failed",
+      "errorType": "engine_timeout",
+      "message": "tessa-image-v1: engine_timeout: The engine did not respond in time — retry the job",
+      "pending": false
+    },
+    {
+      "label": "palette-16-256",
+      "specimenId": "6a5efd",
+      "startedAt": "2026-10-13T12:05:21.534Z",
+      "dimensions": [
+        16,
+        16
+      ],
+      "inputSha256": "630de241edd2188b753c2b898c7dd7f05157bd3e1e4c6473940f3560893dc2a3",
+      "asset": "079eee48-3d27-4a8e-b6e3-bc23239a6a47",
+      "params": {
+        "machine": "aer",
+        "shots": 256,
+        "fixed_palette": true,
+        "separate_rgb": true,
+        "distortion": 0,
+        "range_correction": false
+      },
+      "jobId": "a3cc0d11-fa1c-49ec-983e-8ba6ab4e292e",
+      "submissions": 1,
+      "elapsedMs": 62811,
+      "outcome": "failed",
+      "remoteStatus": "failed",
+      "errorType": "engine_timeout",
+      "message": "tessa-image-v1: engine_timeout: The engine did not respond in time — retry the job",
+      "pending": false
+    },
+    {
+      "label": "palette-4-16",
+      "specimenId": "6a5efd",
+      "startedAt": "2026-10-13T12:06:27.517Z",
+      "dimensions": [
+        4,
+        4
+      ],
+      "inputSha256": "8ed486e09715cea8525e59e5507a9b28188240ade43187cb187bdcdf4b0293ce",
+      "asset": "bac7645e-4794-404b-b514-b5ca951db692",
+      "params": {
+        "machine": "aer",
+        "shots": 16,
+        "fixed_palette": true,
+        "separate_rgb": true,
+        "distortion": 0,
+        "range_correction": false
+      },
+      "jobId": "3352f2e8-fc82-4f40-bdfb-5dc04801b114",
+      "submissions": 1,
+      "elapsedMs": 62899,
+      "outcome": "failed",
+      "remoteStatus": "failed",
+      "errorType": "engine_timeout",
+      "message": "tessa-image-v1: engine_timeout: The engine did not respond in time — retry the job",
+      "pending": false
+    },
+    {
+      "label": "palette-floor-2-1",
+      "specimenId": "6a5efd",
+      "startedAt": "2026-10-13T12:07:32.862Z",
+      "dimensions": [
+        2,
+        2
+      ],
+      "inputSha256": "14baa0e9713fd9ed6b943a9bb5df763c306f2824d47bb02b5e54bf15fc083674",
+      "asset": "e2c4fe93-525b-4920-a29f-6553f4f19c37",
+      "params": {
+        "machine": "aer",
+        "shots": 1,
+        "fixed_palette": true,
+        "separate_rgb": true,
+        "distortion": 0,
+        "range_correction": false
+      },
+      "jobId": "d882cafd-8fe1-45c8-a37c-91f5157b2b03",
+      "submissions": 1,
+      "elapsedMs": 62529,
+      "outcome": "failed",
+      "remoteStatus": "failed",
+      "errorType": "engine_timeout",
+      "message": "tessa-image-v1: engine_timeout: The engine did not respond in time — retry the job",
+      "pending": false
+    },
+    {
+      "label": "merged-floor-2-1",
+      "specimenId": "6a5efd",
+      "startedAt": "2026-10-13T12:08:38.097Z",
+      "dimensions": [
+        2,
+        2
+      ],
+      "inputSha256": "14baa0e9713fd9ed6b943a9bb5df763c306f2824d47bb02b5e54bf15fc083674",
+      "asset": "e2c4fe93-525b-4920-a29f-6553f4f19c37",
+      "params": {
+        "machine": "aer",
+        "shots": 1,
+        "fixed_palette": false,
+        "separate_rgb": false,
+        "distortion": 0,
+        "range_correction": false
+      },
+      "jobId": "6a9ed067-672c-4d68-8b70-e187ea2691e9",
+      "submissions": 1,
+      "elapsedMs": 62701,
+      "outcome": "failed",
+      "remoteStatus": "failed",
+      "errorType": "engine_timeout",
+      "message": "tessa-image-v1: engine_timeout: The engine did not respond in time — retry the job",
+      "pending": false
+    }
+  ],
+  "finishedAt": "2026-10-13T12:10:15.480Z",
+  "totalSubmissions": 6,
+  "conclusion": "No candidate: all six settings returned a terminal remote engine_timeout; application defaults were not changed."
+}

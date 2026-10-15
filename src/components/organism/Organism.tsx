@@ -10,7 +10,7 @@
  */
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from "react";
-import type { Wound } from "@/lib/chain/types";
+import type { SpecimenInteractionMode, Wound } from "@/lib/chain/types";
 import type { CursorApi } from "./OrganismScene";
 
 export interface OrganismProps {
@@ -18,6 +18,8 @@ export interface OrganismProps {
   onWound?: (w: Wound) => void;
   /** Disable orbit/touch (e.g. for thumbnails). Default true. */
   interactive?: boolean;
+  /** Touch leaves a wound; inspect pins a read-only point. Default touch. */
+  interactionMode?: SpecimenInteractionMode;
   /** Slow idle auto-rotation (pauses on interaction, resumes after 4 s). Default true. */
   autoRotate?: boolean;
   className?: string;
@@ -29,7 +31,7 @@ export const STAGE_BACKGROUND = "radial-gradient(120% 120% at 50% 50%, #0b0b0e 0
 
 const OrganismScene = dynamic(() => import("./OrganismScene"), { ssr: false, loading: () => null });
 
-export default function Organism({ onWound, interactive = true, autoRotate = true, className, style }: OrganismProps) {
+export default function Organism({ onWound, interactionMode = "touch", interactive = true, autoRotate = true, className, style }: OrganismProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
   const ringInnerRef = useRef<HTMLDivElement>(null);
@@ -94,7 +96,7 @@ export default function Organism({ onWound, interactive = true, autoRotate = tru
         ...style,
       }}
     >
-      <OrganismScene onWoundRef={onWoundRef} cursor={cursor} interactive={interactive} autoRotate={autoRotate} />
+      <OrganismScene onWoundRef={onWoundRef} cursor={cursor} interactive={interactive} interactionMode={interactionMode} autoRotate={autoRotate} />
       <div
         ref={ringRef}
         aria-hidden

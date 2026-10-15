@@ -178,13 +178,19 @@ export class SurfaceSampler {
     const strengths = u.uWoundStrength.value as Float32Array;
     const ripple = (angle: number, age: number) => {
       const x = angle - age * 0.85;
-      return Math.cos(x * 20) * Math.exp(-x * x * 22 - age * 0.95) * 0.032 - Math.exp(-angle * angle * 70 - age * 3.2) * 0.055;
+      return Math.cos(x * 22) * Math.exp(-x * x * 24 - age * 0.74) * 0.052 - Math.exp(-angle * angle * 86 - age * 2.35) * 0.092;
     };
     for (let i = 0; i < (u.uWoundCount.value as number); i++) {
       const wound = wounds[i];
       const angle = Math.acos(Math.max(-1, Math.min(1, dx * wound.x + dy * wound.y + dz * wound.z)));
       transient += strengths[i] * (ripple(angle, wound.w) + e * 0.85 * ripple(Math.PI - angle, wound.w));
     }
+    const gesture = u.uGesture?.value as Vector4 | undefined;
+    if (gesture) {
+      const dot = dx * gesture.x + dy * gesture.y + dz * gesture.z;
+      transient += gesture.w * (Math.exp((dot - 1) * 13) - (u.uGesturePair.value as number) * Math.exp((-dot - 1) * 13));
+    }
+    transient += ((u.uRhythm?.value as number | undefined) ?? 0) * (0.7 + 0.3 * Math.cos(dy * 5));
     this.disp = base + (u.uSomaAmp.value as number) * som * this.field + br + transient;
     return this.disp;
   }

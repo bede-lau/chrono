@@ -168,3 +168,11 @@
 **Decision**: Treat `v=1` as the north pole/top row (`row = (1-v)·height`) and form wounds from great-circle distance. Keep a non-zero baseline for Atlas compatibility and make wound contrast visibly stronger.
 
 **Consequence**: Painted wounds align with the organism’s latitude and remain round on its spherical surface.
+
+## D19: Verified visitor keys in browser memory
+
+**Context**: The initial key field was a design placeholder. The user explicitly requested a functional key connection and clear acceptance feedback.
+
+**Decision**: Check the visitor's key through a same-origin POST proxy that authenticates with Atlas `GET /me`; only a genuine authenticated identity response produces Accepted. Pass the accepted key as a request-scoped Authorization header for uploads, submissions, status, results, and downloads. Keep the key only in browser memory; never cache it in the server singleton or persist it in cookies, storage, logs, or specimen data. The configured app key stays server-side and is used only when no visitor key is selected.
+
+**Consequence**: Editing resets acceptance; unchecked keys block starting a chain, and active runs lock changes. Each run snapshots its credential and records only a private fingerprint for same-job Resume checks. Evolving across credential scopes uploads the cached skin into the selected account. Clearing the field restores the app key; reload discards the visitor key. Acceptance confirms authentication, not a credit balance or engine latency guarantee.

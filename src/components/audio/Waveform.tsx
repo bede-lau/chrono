@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 import { decodeWav } from "@/lib/audio/wav";
+import { useVisualTicker } from "./useVisualTicker";
 
 const BUCKETS = 200;
 
@@ -15,7 +16,6 @@ export default function Waveform({ url, className }: { url: string; className?: 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const peaksRef = useRef<Float32Array | null>(null);
-  const rafRef = useRef(0);
   const [playback, setPlayback] = useState({ url: "", playing: false, progress: 0 });
   const [loadVersion, setLoadVersion] = useState(0);
   const playing = playback.url === url && playback.playing;
@@ -105,26 +105,17 @@ export default function Waveform({ url, className }: { url: string; className?: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!playing) {
-      cancelAnimationFrame(rafRef.current);
-      return;
-    }
+  useVisualTicker(() => {
+    if (!playing) return;
     const audio = audioRef.current;
-    const step = () => {
-      if (audio && audio.duration) {
-        const nextProgress = audio.currentTime / audio.duration;
-        setPlayback((current) => current.url === url ? { ...current, progress: nextProgress } : current);
-      }
-      rafRef.current = requestAnimationFrame(step);
-    };
-    rafRef.current = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [playing, url]);
+    if (audio && audio.duration) {
+      const nextProgress = audio.currentTime / audio.duration;
+      setPlayback((current) => current.url === url ? { ...current, progress: nextProgress } : current);
+    }
+  }, playing, 15);
 
   useEffect(
     () => () => {
-      cancelAnimationFrame(rafRef.current);
       audioRef.current?.pause();
     },
     [],

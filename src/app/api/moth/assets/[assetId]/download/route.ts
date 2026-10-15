@@ -13,8 +13,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ asse
   const { assetId } = await params;
   if (!ID_RE.test(assetId)) return jsonError(400, "bad_asset_id", "invalid asset id", false);
   try {
-    const upstream = await proxyClient().fetchAsset(assetId, request.signal);
-    const headers = new Headers({ "Cache-Control": "private, max-age=3600" });
+    const upstream = await proxyClient(request).fetchAsset(assetId, request.signal);
+    // Assets are now credential-scoped. Never let a browser reuse bytes fetched under another key.
+    const headers = new Headers({ "Cache-Control": "no-store", Vary: "Authorization" });
     for (const h of ["content-type", "content-length", "content-disposition"]) {
       const v = upstream.headers.get(h);
       if (v) headers.set(h, v);

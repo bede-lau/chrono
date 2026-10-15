@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { MotionConfig, motion } from "motion/react";
 import { SlidersHorizontal } from "lucide-react";
 import { LENS_OFF, STAGES, type Wound } from "@/lib/chain/types";
@@ -12,7 +12,7 @@ import { ArchiveDrawer } from "./ArchiveDrawer";
 import { ChainRail } from "./ChainRail";
 import { ChainActions } from "./ControlsCard";
 import { Organism, useAudioEngine } from "./deps";
-import { Hint } from "./Hint";
+import { SpecimenProbes } from "./SpecimenProbes";
 import { InfoSheet } from "./InfoSheet";
 import { ICON, T } from "./primitives";
 import { RightPanel } from "./RightPanel";
@@ -52,12 +52,21 @@ export function ChronoApp() {
   const mounted = useMounted();
   const mobile = useIsMobile();
   const { click } = useAudioEngine();
+  const interactionMode = useChrono((s) => s.interactionMode);
+  const specimenKey = useChrono((s) => s.specimen ? `${s.specimen.id}:${s.specimen.generation}` : null);
+  const previousSpecimenKey = useRef(specimenKey);
 
   useSpecimenHue();
 
   useEffect(() => {
     useUi.getState().setMobile(mobile);
   }, [mobile]);
+
+  useEffect(() => {
+    if (previousSpecimenKey.current === specimenKey) return;
+    previousSpecimenKey.current = specimenKey;
+    useChrono.getState().setProbe(null);
+  }, [specimenKey]);
 
   useEffect(() => {
     void bootstrap();
@@ -79,6 +88,12 @@ export function ChronoApp() {
 
   useShortcuts({
     primary,
+    rhythm: () => {
+      const state = useChrono.getState();
+      if (state.interactionMode !== "rhythm" || !state.specimen || state.mode !== "idle") return false;
+      state.tapRhythm();
+      return true;
+    },
     newSpecimen,
     toggleMute: toggleAudio,
     inspect: (i) => {
@@ -112,7 +127,7 @@ export function ChronoApp() {
       <main className="fixed inset-0 overflow-hidden bg-stage">
         {/* The organism is the stage. Everything else floats above it and lets pointer events through. */}
         <div className="absolute inset-0 z-0">
-          <Organism onWound={(w: Wound) => click(w.strength)} />
+          <Organism interactionMode={interactionMode} onWound={(w: Wound) => click(w.strength)} />
         </div>
         <div aria-hidden className="vignette pointer-events-none absolute inset-0 z-[1]" />
 
@@ -123,7 +138,7 @@ export function ChronoApp() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           >
-            <Hint compact={mobile} />
+            <SpecimenProbes compact={mobile} />
             <TopBar compact={mobile} />
 
             {/* Reading / Tab order follows the layout: top bar, the panel, then telemetry and the rail. */}

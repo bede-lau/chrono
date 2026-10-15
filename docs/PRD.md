@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-**Chrono** is a quantum organism in the browser, built for **Moth Hack 2026 · Intermediate · Challenge 06 "Daisy Chain"** (use as many engines as possible; measured on number and effective use). A living entity computed across **8 Moth Atlas engines in strict sequence**, each consuming the previous engine's output. The user orbits it, touches it (each touch is a decoherence wound), and evolves it; it ages, warps, shimmers, and sings in response. **UI/UX quality is priority #1:** Apple-grade restraint—black stage, the organism is the only colour, hairline UI, 60 fps, immediate feedback.
+**Chrono** is a quantum organism in the browser, built for **Moth Hack 2026 · Intermediate · Challenge 06 "Daisy Chain"** (use as many engines as possible; measured on number and effective use). A living entity computed across **8 Moth Atlas engines in strict sequence**, each consuming the previous engine's output. The user orbits it, touches it (each touch is a decoherence wound), and evolves it; it ages, warps, shimmers, and sings in response. **UI/UX quality is priority #1:** Apple-grade restraint—black stage, the organism is the only colour, hairline UI, immediate feedback. The render scheduler targets 30 frames/s with a specimen and 15 in the blank state; this is a resource budget, not a device-independent performance guarantee.
 
 ---
 
@@ -29,7 +29,7 @@
 - **Morphogenesis**: `machine = controls.machine` (default `aer`; `fake_fez` = IBM Fez noise model), `shots 256` per colour field.
 - **Decoherence**: `strength = 0.25 + 0.6·decay`, `reach = 0.8·entanglement`, `style = rx` (ry collapses gradients), mask = spherical great-circle wound Gaussians with north-up UVs (`v=1` is the top image row), plus a 0.15 baseline so the whole body ages.
 - **Soma**: `values = lumaGrid(tissue, 32)`, `strength = 0.3 + 0.5·entanglement`, `reach = entanglement`, `style "xy"`.
-- **Membrane**: `reflectance = clamp(0.08 + 0.6·meanLuma, .05, .9)`, `absorption = clamp(entropy/8, .1, .98)`, `layers = 1 + round(3·normVariance)` (1–4), `incoming_rays = max(layers, min(layers + 4 + genome[5] % 4, 4))` (respect 21-qubit budget), `interaction = clamp(2·hueSkew, -2, 2)` (sign → distinct pattern), `style` by entropy bucket (<3 `3-body`, <5 `peaked`, <6.5 `frustrated`, else `constrained`), `resolution 24`.
+- **Membrane** (`src/lib/chain/membraneParams.ts`): `reflectance = clamp(.08 + .72·meanLuma + .3·(genome[4]/255 − .5), .05, .9)`; `absorption = clamp(.1 + .56·(entropy/8)^.8 + .26·genome[3]/255, .1, .98)`; `layers = 1 + round(3·clamp(.65·clamp(2σ,0,1) + .35·genome[1]/255,0,1))` (1–4); rays are `layers + genome[5] % (5 − layers)` (layers–4); interaction uses signed signal `.7·hueSkew + .3·(2·genome[2]/255 − 1)` and is scaled by entanglement, retaining sign for pattern direction; style rotates the four entropy buckets by `genome[0] % 4`, so every bucket can select every style; resolution is 24.
 - **Voice**: `length 16`, `quality "fast"` (fallback `"instant"` on timeout), `seed = uint32(genome[8..11])`, `variation = 0.6 + entanglement`, `crossfade 120`, `loop true`.
 - **Echo**: `n_sites = colony.numQubits`, `depth = circuitDepth`, `theta_x = 0.3 + 1.2·entropy/8`, `mix 0.55`, `feedback = 0.3·decay`, `machine "aer"`, `negative_mode "invert"`.
 
@@ -44,6 +44,9 @@
 - The primary action reads **Create** when blank and **Evolve** when a specimen exists. New specimen resets to blank and keeps slider values. Archive loading is explicit. Space invokes the current primary action; N resets; M toggles audio; 1–8 opens Evolution for that stage; Esc returns to Parameters.
 - A single right panel (mobile bottom sheet) switches immediately between **Parameters** and **Evolution**. Evolution follows the running stage until the user manually chooses another. Its order is stage header, artifact preview, plain-English “What it does”, “On the organism” with lens controls, engine-specific controls, and collapsible run details. Before Create, it remains documentation and shows “Waiting for Create” in the artifact area.
 - The Chrono Lens reveals each engine’s contribution on the same blob through a Without/With scrubber, hemisphere comparison and diagnostic overlay. Stage selection activates its lens; Parameters resets it. A linked probe connects artifact previews with positions on the organism. Controls preview live on the blob and changed values remain marked pending until Evolve.
+- Pulse specimen briefly stimulates the membrane without adding a wound; surface touch records a wound. Linked probes connect the selected organism position with the matching artifact preview.
+- Rendering targets 30 frames/s with a specimen and 15 in the blank state, caps device pixel ratio at 1.5, uses a 160×100 sphere mesh, and pauses while the document is hidden. These are scheduling settings, not a measured guarantee across devices.
+- Parameters accepts a session-only Moth API key. **Check key** performs read-only Atlas authentication and shows Accepted/Rejected feedback. Create/Evolve require any entered key to be verified; editing invalidates acceptance, and clearing restores the server-configured app key. The key survives panel switching but not reload and is never saved in storage, cookies, logs, or specimen data. Each chain uses a captured credential; pending-job Resume requires its original key. Evolving archived tissue under a different key uploads the cached skin into that account before continuing the chain.
 - The mask uses spherical great-circle wound Gaussians. Wound coordinates use `v = 1` for the north pole/top image row, so image consumers map to `row = (1-v)·height`. The baseline stays non-zero for Atlas input, with stronger wound contrast.
 - Plain-English engine explanations live with stage copy and describe both the engine’s role in the chain and its visible contribution. Decoherence, Soma and Membrane effects must read clearly on the organism.
 
@@ -103,7 +106,7 @@
 |---|---|---|
 | **Number of Engines** | Maximum distinct Moth engines. | 8-engine chain (comet-qrng + graph + tessa + blur + blur-core + entanglement-shader + qrc-audio + retrocausal-echo). |
 | **Effective Use** | Legitimate algorithmic interdependence; each output directly feeds the next input. | Strict coupling: every stage consumes previous output via `output_asset_id` or stored artifact; notes document numerical derivations (entropy → LUT absorption, etc.). |
-| **Quality of Execution** | Polished, bug-free, responsive, 60 fps, zero audio clipping. | Black stage, organism as focal point, hairline UI, immediate feedback on all interactions, telemetry for judge inspection. |
+| **Quality of Execution** | Polished, responsive, controlled render budget, zero audio clipping. | Black stage, organism as focal point, hairline UI, immediate feedback on interactions, telemetry for judge inspection. Rendering targets 30 frames/s with a specimen and 15 in the blank state; device performance varies. |
 | **Originality** | Novel conceptual exploration. | Quantum physics-driven procedural life, no trained models, no scraped data; user decoherence wounds as interaction mechanism. |
 
 ---

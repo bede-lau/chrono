@@ -25,6 +25,7 @@ import {
   type Texture,
   type WebGLRenderer,
 } from "three";
+import { springStep } from "@/lib/interactions";
 import type { ChronoState } from "@/lib/store";
 import { LENS_OFF, type Lut, type Specimen, type Wound } from "@/lib/chain/types";
 import {
@@ -74,7 +75,10 @@ import { ScalarTexture, floatLinearSupported, imagePixels, loadImage, solidTextu
 /** Soma displacement amplitude for a σ-normalised field (≈6 % RMS of the radius, peaks ≈15 %). */
 const SOMA_AMP = 0.125;
 const RELIEF_AMP = 0.085;
-const RIPPLE_LIFE = 5; // s
+// A touch has to read as a response before it becomes a real decoherence mask. Keep
+// the travelling wave around long enough to be noticed; the pending scar itself is
+// retained until Evolve clears the queue.
+const RIPPLE_LIFE = 8; // s
 const TRANSITION = 0.8; // s (texture crossfade)
 const TAU_FAST = 0.22; // exponential approach time constant (~95% in 0.66 s)
 const TAU_SLOW = 0.32;
@@ -92,6 +96,24 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, Number.isFinite(x) ? x : 
 const finite = (x: number | undefined) => (Number.isFinite(x) ? (x as number) : 0);
 const byNewest = (a: Wound, b: Wound) => b.t - a.t;
 
+/** Mean absolute variation is a robust, cheap read of how expressive an engine LUT is. */
+function lutVariation(lut: Lut, mean: number) {
+  if (!Number.isFinite(mean) || mean <= 1e-6) return 0;
+  let total = 0;
+  let count = 0;
+  for (const value of lut.data) {
+    if (!Number.isFinite(value)) continue;
+    total += Math.abs(value - mean);
+    count++;
+  }
+  return count ? clamp01((total / count) / Math.max(mean, 1e-4)) : 0;
+}
+
+/** Stable enough to pair an immediate local touch with its Zustand queue entry. */
+function woundKey(wound: Wound) {
+  return `${wound.t}:${wound.u.toFixed(6)}:${wound.v.toFixed(6)}`;
+}
+
 /** Wound-convention (u, v = 1 north) -> unit direction, written into `out` (no allocation). */
 function uvInto(u: number, v: number, out: Vector3 | Vector4) {
   const phi = u * TWO_PI;
@@ -102,7 +124,7 @@ function uvInto(u: number, v: number, out: Vector3 | Vector4) {
   out.z = Math.sin(phi) * s;
 }
 
-export type RigInput = Pick<ChronoState, "controls" | "audioLevel" | "pendingWounds" | "lens" | "probe" | "runs" | "mode">;
+export type RigInput = Pick<ChronoState, "controls" | "audioLevel" | "pendingWounds" | "lens" | "probe" | "runs" | "mode"> & Partial<Pick<ChronoState, "gesture" | "rhythm" | "lightProbe" | "interactionMode">>;
 
 /** A SOMA_RES² field that lerps (CPU) towards its target, including its pole values. */
 class FieldAnim {
@@ -345,6 +367,10 @@ export class OrganismRig {
     maturity: 0,
     rScale: 1,
     tScale: 1,
+    membraneContrast: 1,
+    membraneFlow: 0,
+    membraneThickness: 500,
+    membraneThicknessVariation: 0.3,
     genome: 0,
     echo: 0,
   };
@@ -378,9 +404,18 @@ export class OrganismRig {
   private audio = 0;
   private entangle = 0.45;
   private age = 1;
+  private pulseAt = 0;
+  private membranePulse = 0;
+  private gestureValue = 0;
+  private gestureVelocity = 0;
+  private gestureToken = 0;
+  private somaStiffness = 16;
+  reducedMotion = false;
 
   // wounds
   private localWounds: Wound[] = [];
+  /** Local ripples that have appeared in the queue and must vanish once Evolve consumes it. */
+  private readonly locallyQueuedWounds = new Set<string>();
   private readonly woundBuf: Wound[] = [];
 
   // compare wipe + probe
@@ -448,6 +483,9 @@ export class OrganismRig {
       uBreath: { value: 0.01 },
       uBreathPhase: { value: 0 },
       uShiver: { value: 0 },
+      uGesture: { value: new Vector4(0, 0, 1, 0) },
+      uGesturePair: { value: 0 },
+      uRhythm: { value: 0 },
       uWoundCount: { value: 0 },
       uWounds: { value: Array.from({ length: MAX_WOUNDS }, () => new Vector4()) },
       uWoundStrength: { value: new Float32Array(MAX_WOUNDS) },
@@ -492,6 +530,12 @@ export class OrganismRig {
         uIrid: { value: 0 },
         uThickness: { value: 500 },
         uThickVar: { value: 0.3 },
+        // These are derived only from the real R/T LUTs. They widen the visual
+        // response of varied membranes without inventing a replacement texture.
+        uMembraneContrast: { value: 1 },
+        uMembraneFlow: { value: 0 },
+        uMembranePulse: { value: 0 },
+        uLightProbe: { value: new Vector3() },
         uSomaOn: { value: 0 },
         uEmbryo: { value: 1 },
         uBeat: { value: 0 },
@@ -625,8 +669,15 @@ export class OrganismRig {
     if (!s) {
       this.lens.resetRuns();
       this.localWounds.length = 0;
+      this.locallyQueuedWounds.clear();
     } else if (this.rootId && root !== this.rootId && this.rootId !== "embryo" && this.mode === "idle") {
       this.lens.cancelReveal();
+    }
+    if (root !== this.rootId) {
+      // A probe belongs to the specimen the visitor stimulated. Do not let its
+      // short glow carry across an archive/new-specimen switch.
+      this.pulseAt = 0;
+      this.membranePulse = 0;
     }
     this.rootId = root;
     this.specimenWounds = s?.wounds ?? [];
@@ -711,6 +762,7 @@ export class OrganismRig {
     t.nucleiPoints = hasColony ? (hasSkin ? 0 : 1) : 0;
     t.genome = hasGenome ? 1 : 0;
     t.echo = s?.echo ? 1 : 0;
+    this.somaStiffness = 12 + 18 * Math.min(1, Math.sqrt(Math.max(0, s?.soma?.variance ?? 0)) * 3);
     t.maturity = [hasGenome, hasColony, hasSkin, !!s?.tissue, hasSoma, hasMembrane, !!(s?.voice || s?.echo)].filter(Boolean).length / 7;
   }
 
@@ -719,6 +771,8 @@ export class OrganismRig {
     this.localWounds.push(w);
     if (this.localWounds.length > MAX_WOUNDS * 2) this.localWounds.splice(0, this.localWounds.length - MAX_WOUNDS * 2);
   }
+
+  setReducedMotion(reduce: boolean) { this.reducedMotion = reduce; }
 
   setPixelScale(pxPerUnit: number) {
     this.nucleiMaterial.uniforms.uPxPerUnit.value = pxPerUnit;
@@ -777,6 +831,10 @@ export class OrganismRig {
     c.maturity = approach(c.maturity, t.maturity, dt, TAU_SLOW);
     c.rScale = approach(c.rScale, t.rScale, dt, TAU_FAST);
     c.tScale = approach(c.tScale, t.tScale, dt, TAU_FAST);
+    c.membraneContrast = approach(c.membraneContrast, t.membraneContrast, dt, TAU_FAST);
+    c.membraneFlow = approach(c.membraneFlow, t.membraneFlow, dt, TAU_FAST);
+    c.membraneThickness = approach(c.membraneThickness, t.membraneThickness, dt, TAU_SLOW);
+    c.membraneThicknessVariation = approach(c.membraneThicknessVariation, t.membraneThicknessVariation, dt, TAU_SLOW);
     c.genome = approach(c.genome, t.genome, dt, TAU_FADE);
     c.echo = approach(c.echo, t.echo, dt, TAU_FADE);
     this.maturity = c.maturity;
@@ -795,6 +853,44 @@ export class OrganismRig {
     const decay = clamp01(ctl?.decay ?? 0.5);
     this.age = approach(this.age, 0.3 + 1.4 * decay, dt, TAU_SLIDER);
     this.audio = approach(this.audio, clamp01(st.audioLevel || 0), dt, 0.08);
+    // `pulseAt` is an optional, additive UI probe. It never changes specimen
+    // data or queues an Atlas run; it only lets the user test the living membrane.
+    const requestedPulse = (st as RigInput & { pulseAt?: number }).pulseAt ?? 0;
+    if (requestedPulse <= 0 && this.pulseAt > 0) {
+      this.pulseAt = 0;
+      this.membranePulse = 0;
+    } else if (requestedPulse > this.pulseAt) this.pulseAt = requestedPulse;
+    const pulseAge = this.pulseAt ? Math.max(0, (nowMs - this.pulseAt) / 1000) : Infinity;
+    this.membranePulse = pulseAge < 1.9 ? Math.exp(-pulseAge * 1.55) * (0.55 + 0.45 * Math.sin(pulseAge * 18)) : 0;
+    // Reversible pressure / coupled tug. Exact damped spring, stable at the 30fps budget.
+    const gesture = st.gesture;
+    const activeGesture = has && st.mode === "idle" && gesture?.active && (st.interactionMode === "pressure" || st.interactionMode === "tug");
+    const gu = u.uGesture.value as Vector4;
+    let gestureTarget = 0;
+    if (activeGesture) {
+      if (gesture.heldAt !== this.gestureToken) {
+        this.gestureToken = gesture.heldAt;
+        this.gestureValue = this.gestureVelocity = 0;
+      }
+      uvInto(gesture.u, gesture.v, gu);
+      const drag = Math.min(1, Math.hypot(gesture.dx, gesture.dy));
+      const hold = Math.min(1, Math.max(0, nowMs - gesture.heldAt) / 900);
+      gestureTarget = gesture.kind === "pressure" ? -0.12 - hold * 0.08 + drag * 0.48 : 0.13 + drag * 0.24;
+      u.uGesturePair.value = gesture.kind === "tug" ? this.entangle : 0;
+    }
+    const modeChanged = st.interactionMode !== "pressure" && st.interactionMode !== "tug";
+    if (!has || modeChanged || st.mode !== "idle") this.gestureValue = this.gestureVelocity = 0;
+    [this.gestureValue, this.gestureVelocity] = springStep(this.gestureValue, this.gestureVelocity, gestureTarget, dt, this.somaStiffness, this.reducedMotion ? 0.99 : 0.52);
+    gu.w = Math.abs(this.gestureValue) > 0.0001 ? this.gestureValue * (this.reducedMotion ? 0.5 : 1) : 0;
+    const beatAge = st.rhythm?.at ? Math.max(0, (nowMs - st.rhythm.at) / 1000) : Infinity;
+    const beatStrength = 0.035 + Math.min(6, st.rhythm?.streak ?? 0) * 0.009;
+    const rhythmBeat = beatAge < 1.3 && st.interactionMode === "rhythm" ? beatStrength * Math.exp(-beatAge * 4.5) * Math.cos(beatAge * 11) : 0;
+    u.uRhythm.value = rhythmBeat * (this.reducedMotion ? 0.3 : 1);
+    const light = st.interactionMode === "light" ? st.lightProbe : null;
+    const lu = u.uLightProbe.value as Vector3;
+    lu.x = approach(lu.x, light?.x ?? -0.32, dt, 0.08);
+    lu.y = approach(lu.y, light?.y ?? 0.36, dt, 0.08);
+    lu.z = approach(lu.z, st.interactionMode === "light" && has ? 1 : 0, dt, 0.16);
     const voiceLens = lensState.stage === "voice" && has;
     this.breathPhase += dt * this.timeScale * Math.PI * 2 * (0.16 + this.audio * 0.34 + (voiceLens ? 0.1 : 0));
 
@@ -835,9 +931,9 @@ export class OrganismRig {
     const probe = st.probe;
     if (probe !== this.lastProbe) {
       this.lastProbe = probe;
-      if (probe && probe.source === "panel") uvInto(probe.u, probe.v, u.uProbe.value as Vector4);
+      if (probe && probe.source !== "blob") uvInto(probe.u, probe.v, u.uProbe.value as Vector4);
     }
-    const showProbe = !!(probe && probe.source === "panel" && has);
+    const showProbe = !!(probe && probe.source !== "blob" && has);
     this.probeA = approach(this.probeA, showProbe ? 1 : 0, dt, 0.12);
     this.probeAntiA = approach(this.probeAntiA, showProbe && lensState.stage === "soma" ? 1 : 0, dt, 0.12);
     (u.uProbe.value as Vector4).w = this.probeA < 0.002 ? 0 : this.probeA;
@@ -868,6 +964,11 @@ export class OrganismRig {
     u.uAudio.value = this.audio;
     u.uRScale.value = c.rScale;
     u.uTScale.value = c.tScale;
+    u.uThickness.value = c.membraneThickness;
+    u.uThickVar.value = c.membraneThicknessVariation;
+    u.uMembraneContrast.value = c.membraneContrast;
+    u.uMembraneFlow.value = c.membraneFlow;
+    u.uMembranePulse.value = this.membranePulse;
     u.uIrid.value = c.irid;
     u.uEmbryo.value = c.embryo;
     u.uCellDetail.value = c.cellDetail;
@@ -1011,13 +1112,26 @@ export class OrganismRig {
     const seed = u.uSeed.value as Vector3;
     const tm = (u.uTime.value as number) * 0.02;
     const nTh = snoise(dx * 1.6 + seed.y + tm, dy * 1.6 + seed.z + tm, dz * 1.6 + seed.x + tm);
-    const thickness = (u.uThickness.value as number) * (1 + (u.uThickVar.value as number) * (0.6 * nTh + 0.4 * field * (u.uSomaOn.value as number)));
+    const pulse = (u.uMembranePulse?.value as number | undefined) ?? 0;
+    const thickness =
+      (u.uThickness.value as number) *
+      (1 + (u.uThickVar.value as number) * (0.6 * nTh + 0.4 * field * (u.uSomaOn.value as number)) + pulse * 0.08);
     const D = -2 * TWO_PI * thickness * cosT;
+    const flowAmount = (u.uMembraneFlow?.value as number | undefined) ?? 0;
+    const flowTime = (u.uTime.value as number) * 0.055;
+    const flow =
+      flowAmount *
+      (0.72 * snoise(dx * 4.1 + seed.z + flowTime, dy * 4.1 + seed.x + flowTime, dz * 4.1 + seed.y + flowTime) +
+        0.28 * Math.sin((u.uTime.value as number) * 0.8 + dy * 8));
     const ph = (lambda: number) => {
       const x = D / lambda;
       return (x - TWO_PI * Math.floor(x / TWO_PI)) / TWO_PI;
     };
-    return { u: uu, v: vv, theta, phase: [ph(650), ph(530), ph(470)] };
+    const phase = (base: number, shift: number) => {
+      const x = base + shift;
+      return x - Math.floor(x);
+    };
+    return { u: uu, v: vv, theta, phase: [phase(ph(650), flow), phase(ph(530), flow * 1.37), phase(ph(470), flow * 1.83)] };
   }
 
   /* ---------------------------------------------------------------- helpers */
@@ -1183,8 +1297,15 @@ export class OrganismRig {
     }
     const rs = lutStats(rl);
     const ts = lutStats(tl);
+    const variation = clamp01(0.55 * lutVariation(rl, rs.mean) + 0.45 * lutVariation(tl, ts.mean));
     this.t.rScale = rs.mean > 1e-6 ? Math.min(4, 0.55 / rs.mean) : 1;
     this.t.tScale = ts.max > 1e-6 ? Math.min(8, 1 / ts.max) : 1;
+    // The generated R/T field decides how strongly it can refract and flow. A
+    // quiet LUT stays restrained; a varied one earns more visible movement.
+    this.t.membraneContrast = 1.05 + variation * 1.35;
+    this.t.membraneFlow = 0.025 + variation * 0.16;
+    this.t.membraneThickness = 380 + variation * 430;
+    this.t.membraneThicknessVariation = 0.2 + variation * 0.34;
     if (!hadMembrane) {
       this.c.rScale = this.t.rScale;
       this.c.tScale = this.t.tScale;
@@ -1222,8 +1343,25 @@ export class OrganismRig {
     const scarLife = (u.uDecayTau.value as number) * 3;
     const life = Math.max(RIPPLE_LIFE, scarLife);
     const local = this.localWounds;
+    const queued = new Set<string>();
+    if (pending) for (const wound of pending) queued.add(woundKey(wound));
+
+    // A click first lives in the local list for its immediate frame, then is
+    // mirrored in Zustand as a pending Evolve input. Once that queue entry is
+    // consumed, remove the local duplicate at once so it cannot paint a second
+    // temporary scar over the returned aged tissue.
     let w = 0;
-    for (let i = 0; i < local.length; i++) if ((nowMs - local[i].t) / 1000 < life) local[w++] = local[i];
+    for (let i = 0; i < local.length; i++) {
+      const wound = local[i];
+      const key = woundKey(wound);
+      if (queued.has(key)) this.locallyQueuedWounds.add(key);
+      if (this.locallyQueuedWounds.has(key) && !queued.has(key)) {
+        this.locallyQueuedWounds.delete(key);
+        continue;
+      }
+      if ((nowMs - wound.t) / 1000 < life) local[w++] = wound;
+      else this.locallyQueuedWounds.delete(key);
+    }
     local.length = w;
     // merge store + local (dedupe by t/u/v), newest first
     const buf = this.woundBuf;
@@ -1232,7 +1370,8 @@ export class OrganismRig {
     if (pending)
       for (let i = 0; i < pending.length; i++) {
         const x = pending[i];
-        if ((nowMs - x.t) / 1000 >= life) continue;
+        // A queued wound is a promise to Evolve, not a short-lived cosmetic
+        // flash. It remains visible until the controller consumes/clears it.
         let dup = false;
         for (let j = 0; j < local.length; j++) {
           const l = local[j];

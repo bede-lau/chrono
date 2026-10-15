@@ -615,7 +615,7 @@ function ColonyPreview({ s }: { s: Specimen }) {
 const MACHINE_LABEL: Record<string, string> = { aer: "Ideal simulator", fake_fez: "IBM Fez noise", fake_torino: "IBM Torino noise", fake_marrakesh: "IBM Marrakesh noise" };
 
 function MorphogenesisPreview({ s }: { s: Specimen }) {
-  const seedUrl = s.colony?.seed.url;
+  const seedUrl = (s.runs.morphogenesis?.inputImage ?? s.colony?.seed)?.url;
   const seed = useSmoothImage(seedUrl);
   const skin = useSmoothImage(s.skin!.url);
   const params = s.runs.morphogenesis?.params;

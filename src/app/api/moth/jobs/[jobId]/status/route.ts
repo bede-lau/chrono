@@ -2,15 +2,21 @@
 import { ID_RE } from "@/lib/moth/engines";
 import { errorResponse, jsonError, noStoreJson } from "@/lib/moth/http";
 import { proxyClient } from "@/lib/moth/proxy";
+import { isOpenAIImageJob, openAIImageJobStatus } from "@/lib/openai/membraneJob";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ jobId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ jobId: string }> }) {
   const { jobId } = await params;
-  if (!ID_RE.test(jobId)) return jsonError(400, "bad_job_id", "invalid job id", false);
+  if (!isOpenAIImageJob(jobId) && !ID_RE.test(jobId)) return jsonError(400, "bad_job_id", "invalid job id", false);
   try {
-    const st = await proxyClient().status(jobId);
+    if (isOpenAIImageJob(jobId)) {
+      const response = noStoreJson(await openAIImageJobStatus(request, jobId));
+      response.headers.set("Vary", "Authorization");
+      return response;
+    }
+    const st = await proxyClient(request).status(jobId, request.signal);
     const { job_id, engine_id, status, error, outputs, result } = st as typeof st & Record<string, unknown>;
     const extra = st as unknown as Record<string, unknown>;
     return noStoreJson({

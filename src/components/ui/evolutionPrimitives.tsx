@@ -8,7 +8,7 @@ import { createContext, useContext, useId, useState, type KeyboardEvent, type Re
 import { AnimatePresence, motion } from "motion/react";
 import { Check, ChevronRight, Copy, Pin } from "lucide-react";
 import type { StageRun } from "@/lib/chain/types";
-import { MAX_ATTEMPTS, formatLatency, isActive, truncateMiddle } from "./format";
+import { attemptLimit, formatLatency, isActive, isRecoverableRun, recoveryText, truncateMiddle } from "./format";
 import { ICON, IconButton, T, T_FAST, cx } from "./primitives";
 
 /* ---------------------------------------------------------------- density */
@@ -294,17 +294,18 @@ export function CopyValue({ value, label }: { value: string; label: string }) {
 
 export function StatusPill({ run }: { run?: StageRun }) {
   const s = run?.status ?? "idle";
+  const recoverable = isRecoverableRun(run);
   const text =
-    s === "done"
+    recoverable ? recoveryText(run) : s === "done"
       ? `Done${run?.latencyMs != null ? ` · ${formatLatency(run.latencyMs)}` : ""}`
       : s === "retrying"
-        ? `Retrying · ${run?.attempt ?? 1}/${MAX_ATTEMPTS}`
+        ? `Retrying · ${run?.attempt ?? 1}/${attemptLimit(run)}`
         : s[0].toUpperCase() + s.slice(1);
   return (
     <span
       className={cx(
         "inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full px-2.5 font-mono text-[10.5px] whitespace-nowrap tabular",
-        s === "failed" ? "bg-danger-soft text-danger" : "bg-white/[0.06] text-fg-2",
+        s === "failed" && !recoverable ? "bg-danger-soft text-danger" : "bg-white/[0.06] text-fg-2",
       )}
     >
       <span
@@ -313,7 +314,7 @@ export function StatusPill({ run }: { run?: StageRun }) {
           "size-1.5 rounded-full",
           s === "done" && "bg-white/90",
           s === "cached" && "bg-white/35",
-          s === "failed" && "bg-danger",
+          s === "failed" && (recoverable ? "bg-white/40" : "bg-danger"),
           s === "idle" && "ring-1 ring-white/30",
           isActive(s) && "breathe bg-accent",
         )}

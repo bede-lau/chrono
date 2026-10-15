@@ -20,8 +20,9 @@ import {
   type RGBAImage,
 } from "../imaging";
 import { synthesizeVocabulary, zipChunks } from "../audio";
-import { runJob, type JobEvent, type JobOutcome, type RunJobOptions } from "../moth/job";
+import { isResumableRemoteJobError, runJob, type JobEvent, type JobOutcome, type RunJobOptions } from "../moth/job";
 import { MothError, isAbortError } from "../moth/errors";
+import { deriveMembraneParams } from "./membraneParams";
 import type { MothOutput, MothTransport } from "../moth/transport";
 import {
   STAGES,
@@ -114,25 +115,26 @@ export const SEED_SIZE = 32;
  * fourfold reduction from the former 1,024 shots per colour field. The repository has no lower-shot
  * quality fixture, so avoid claiming a visual-quality guarantee below this setting.
  */
-export const TESSA_SHOTS = 256;
+/**
+ * Tessa's upstream worker currently has an approximately one-minute execution cap. A 16×16
+ * colour field at 128 shots is the first, legible pass; one 64-shot retry is deliberately
+ * smaller rather than re-submitting the same work six times.
+ */
+export const TESSA_SHOTS = 128;
+export const TESSA_FALLBACK_SHOTS = 64;
+export const TESSA_INPUT_SIZE = 16;
 /**
  * The organism shader bilinearly samples these LUTs, so a 24×24 table remains smooth on the body
  * while asking Atlas to generate one quarter as many table entries as the former 48×48 table.
  */
 export const LUT_RESOLUTION = 24;
 /**
- * Entanglement Shader cost rises sharply with each simultaneous ray. Preserve the full Soma-derived
- * layer range, but avoid the 6–9 ray jobs that have taken minutes.
- */
-const FAST_SHADER_MAX_RAYS = 4;
-/**
  * Wound-mask floor: every part of the body ages a little. Low, so a wound reads clearly against it (live blur-v1, 4 wounds,
  * 32×32 skin: wound cores change ≈7.8× more than the unwounded body at 0.15, only ≈2.5× at the old 0.35) but never 0 — Atlas can
  * reject a blank upload, and blur-v1 treats mask values under `mask_bin_size` (default 4 % ≈ 10/255) as background.
  */
 export const MASK_BASELINE = 0.15;
-/** entanglement-shader-v1 21-qubit budget, measured 2026-09-26: max incoming_rays per layer count. */
-const SHADER_MAX_RAYS: Record<number, number> = { 1: 10, 2: 9, 3: 8, 4: 8 };
+/** Voice fast-quality wait budget before its supported instant-quality fallback. */
 const QRC_FAST_TIMEOUT_MS = 8 * 60_000;
 /** Deterministic re-tints (hue°, chroma gain) tried when Atlas' upload verifier rejects a generated seed. */
 const SEED_RETINTS: [number, number][] = [
@@ -158,6 +160,8 @@ interface Ctx {
   wounds: Wound[];
   signal?: AbortSignal;
   opts: ChainOptions;
+  /** Remote jobs that survived a local client timeout and must be polled, never re-submitted. */
+  resumeJobs: Partial<Record<StageId, { jobId: string; startedAt?: number; attempt: number }>>;
   /** Decoded images kept in memory across stages (avoids re-reading from the sink). */
   mem: { seed?: RGBAImage; seedPng?: Uint8Array; skin?: RGBAImage; skinPng?: Uint8Array; tissue?: RGBAImage };
 }
@@ -203,7 +207,13 @@ async function readPng(ctx: Ctx, img: ImageArtifact | undefined, what: string): 
 interface StageHandle {
   id: StageId;
   upload(bytes: Uint8Array, filename: string, contentType: string): Promise<string>;
-  job(body: { input_files?: Record<string, string>; params?: Record<string, unknown> }, opts?: Partial<RunJobOptions>): Promise<JobOutcome>;
+  job(
+    body: { input_files?: Record<string, string>; params?: Record<string, unknown> },
+    opts?: Partial<RunJobOptions> & {
+      /** local total-attempt offset for a deliberate stage fallback */ attemptOffset?: number;
+      /** UI/audit budget when one outer stage owns several one-attempt jobs */ totalMaxAttempts?: number;
+    },
+  ): Promise<JobOutcome>;
   download(outcome: JobOutcome, pick: (o: MothOutput) => boolean, what: string): Promise<{ bytes: Uint8Array; output: MothOutput }>;
 }
 
@@ -244,32 +254,49 @@ function handle(ctx: Ctx, id: StageId): StageHandle {
       return assetId;
     },
     async job(body, over = {}) {
+      const { attemptOffset = 0, totalMaxAttempts, ...runOptions } = over;
+      // A resumable id belongs to exactly one call. A later fallback must always submit its
+      // lower-work payload, never reconnect to the terminal job that caused it.
+      const resume = ctx.resumeJobs[id];
+      if (resume) delete ctx.resumeJobs[id];
+      const toAttempt = (attempt: number) => attempt + attemptOffset;
+      const toMaxAttempts = (attempts: number) => attempts + attemptOffset;
+      // `runJob` numbers a resumed remote attempt from the original submission. Its internal
+      // ceiling must therefore include that number even when this outer stage only permits one
+      // new submission (for example Tessa's second, 64-shot attempt).
+      const requestedMaxAttempts = runOptions.maxAttempts ?? ctx.opts.jobOptions?.[engineId]?.maxAttempts ?? 6;
+      const effectiveMaxAttempts = Math.max(requestedMaxAttempts, resume ? Math.max(1, resume.attempt - attemptOffset) : 1);
       accumulatedInputs = { ...(body.input_files ?? {}) };
       setRun(ctx, id, {
         status: "queued",
         params: body.params,
         inputs: Object.keys(accumulatedInputs).length ? accumulatedInputs : undefined,
+        maxAttempts: totalMaxAttempts ?? toMaxAttempts(effectiveMaxAttempts),
+        // Clear a terminal job before a new submission. Keeping it here would make an abort of
+        // the fallback look resumable even though the saved id belongs to the first failure.
+        jobId: resume?.jobId,
       });
       const onStatus = (e: JobEvent) => {
+        const attempt = toAttempt(e.attempt);
         switch (e.phase) {
           case "submitting":
-            setRun(ctx, id, { status: e.attempt > 1 ? "retrying" : "queued", attempt: e.attempt });
+            setRun(ctx, id, { status: attempt > 1 ? "retrying" : "queued", attempt, jobId: undefined });
             break;
           case "queued":
-            setRun(ctx, id, { status: "queued", attempt: e.attempt, jobId: e.jobId });
+            setRun(ctx, id, { status: "queued", attempt, jobId: e.jobId });
             break;
           case "processing":
-            setRun(ctx, id, { status: "running", attempt: e.attempt, jobId: e.jobId });
+            setRun(ctx, id, { status: "running", attempt, jobId: e.jobId });
             break;
           case "retrying":
-            setRun(ctx, id, { status: "retrying", attempt: e.attempt, error: e.error });
-            log(ctx, "warn", `${engineId} attempt ${e.attempt - 1} failed (${e.errorType ?? "error"}); retry ${e.attempt}/${e.maxAttempts} in ${Math.round((e.retryInMs ?? 0) / 1000)} s`, id);
+            setRun(ctx, id, { status: "retrying", attempt, error: e.error, errorType: e.errorType });
+            log(ctx, "warn", `${engineId} attempt ${attempt - 1} failed (${e.errorType ?? "error"}); retry ${attempt}/${totalMaxAttempts ?? toMaxAttempts(e.maxAttempts)} in ${Math.round((e.retryInMs ?? 0) / 1000)} s`, id);
             break;
           case "completed":
-            setRun(ctx, id, { jobId: e.jobId, attempt: e.attempt, error: undefined });
+            setRun(ctx, id, { jobId: e.jobId, attempt, error: undefined, errorType: undefined });
             break;
           case "failed":
-            setRun(ctx, id, { jobId: e.jobId, attempt: e.attempt, error: e.error });
+            setRun(ctx, id, { jobId: e.jobId, attempt, error: e.error, errorType: e.errorType });
             break;
         }
         ctx.opts.jobOptions?.[engineId]?.onStatus?.(e);
@@ -277,10 +304,18 @@ function handle(ctx: Ctx, id: StageId): StageHandle {
       const outcome = await runJob(ctx.deps.transport, engineId, body, {
         signal: ctx.signal,
         ...(ctx.opts.jobOptions?.[engineId] ?? {}),
-        ...over,
+        ...runOptions,
+        maxAttempts: effectiveMaxAttempts,
+        ...(resume
+          ? {
+              resumeJobId: resume.jobId,
+              resumeSubmittedAt: resume.startedAt,
+              resumeAttempt: Math.max(1, resume.attempt - attemptOffset),
+            }
+          : {}),
         onStatus,
       });
-      setRun(ctx, id, { jobId: outcome.jobId, attempt: outcome.attempt, latencyMs: outcome.latencyMs });
+      setRun(ctx, id, { jobId: outcome.jobId, attempt: toAttempt(outcome.attempt), latencyMs: outcome.latencyMs });
       return outcome;
     },
     async download(outcome, pick, what) {
@@ -294,8 +329,23 @@ function handle(ctx: Ctx, id: StageId): StageHandle {
           retryable: false,
         });
       }
-      const bytes = await withRetries(ctx, `download ${what}`, () => ctx.deps.transport.download(output));
-      return { bytes, output };
+      try {
+        const bytes = await withRetries(ctx, `download ${what}`, () => ctx.deps.transport.download(output));
+        return { bytes, output };
+      } catch (e) {
+        if (isAbortError(e)) throw e;
+        const err = e instanceof MothError ? e : undefined;
+        // The remote job has already completed. Reconnecting should renew the result/output path, not
+        // submit the engine again just because a signed-URL or network download was unavailable.
+        throw new MothError({
+          status: err?.status ?? 0,
+          type: "output_unavailable",
+          message: `${engineId} job ${outcome.jobId} completed, but ${what} could not be downloaded (${err?.message ?? String((e as Error)?.message ?? e)})`,
+          retryable: false,
+          jobId: outcome.jobId,
+          engineId,
+        });
+      }
     },
   };
 }
@@ -306,30 +356,45 @@ interface StageResult {
 
 async function execStage(ctx: Ctx, id: StageId, body: (h: StageHandle) => Promise<StageResult>): Promise<void> {
   if (ctx.signal?.aborted) throw abortErr();
-  const startedAt = Date.now();
+  const resume = ctx.resumeJobs[id];
+  const startedAt = resume?.startedAt ?? Date.now();
+  const prior = ctx.s.runs[id];
   setRun(ctx, id, {
     status: "queued",
-    attempt: 0,
+    attempt: resume?.attempt ?? 0,
     startedAt,
     finishedAt: undefined,
     latencyMs: undefined,
-    jobId: undefined,
+    jobId: resume?.jobId,
     error: undefined,
+    errorType: undefined,
     note: undefined,
-    params: undefined,
-    inputs: undefined,
+    // A reconnect must retain its original body and reduced input image. It is the same remote
+    // job, so wiping this metadata would make its provenance misleading in the UI and archive.
+    ...(resume
+      ? { params: prior?.params, inputs: prior?.inputs, inputImage: prior?.inputImage, maxAttempts: prior?.maxAttempts }
+      : {}),
   });
   ctx.deps.reporter?.setMode?.(ctx.mode, id);
   log(ctx, "info", `${ENGINE[id]} ▸ ${STAGES.find((s) => s.id === id)?.title}`, id);
   try {
     const { note } = await body(handle(ctx, id));
     const run = ctx.s.runs[id];
-    setRun(ctx, id, { status: "done", finishedAt: Date.now(), note, error: undefined });
+    setRun(ctx, id, { status: "done", finishedAt: Date.now(), note, error: undefined, errorType: undefined });
     log(ctx, "ok", `${ENGINE[id]} ✓ ${run?.latencyMs != null ? `${(run.latencyMs / 1000).toFixed(1)} s` : ""}${run && run.attempt > 1 ? ` (attempt ${run.attempt})` : ""} — ${note}`, id);
   } catch (e) {
     const aborted = isAbortError(e) || ctx.signal?.aborted;
-    const msg = aborted ? "aborted" : e instanceof Error ? e.message : String(e);
-    setRun(ctx, id, { status: "failed", finishedAt: Date.now(), error: msg });
+    const run = ctx.s.runs[id];
+    // An abort only stops this browser/CLI from waiting. Once a job id exists, Atlas may still be
+    // working; retain an explicit recovery marker so Stop → Resume cannot submit it twice.
+    const remoteAborted = aborted && !!run?.jobId;
+    const msg = remoteAborted ? "stopped locally; Atlas job may still be processing" : aborted ? "aborted" : e instanceof Error ? e.message : String(e);
+    setRun(ctx, id, {
+      status: "failed",
+      finishedAt: Date.now(),
+      error: msg,
+      errorType: remoteAborted ? "client_aborted" : e instanceof MothError ? e.type : undefined,
+    });
     log(ctx, "error", `${ENGINE[id]} ✕ ${msg} — chain halted, organism dormant`, id);
     if (aborted) throw e;
     throw new ChainHaltedError(id, ctx.s, e);
@@ -441,51 +506,89 @@ async function colony(ctx: Ctx, h: StageHandle): Promise<StageResult> {
 /** 2 · Morphogenesis — tessa-image-v1: colony seed PNG (uploaded) → quantum skin PNG. */
 async function morphogenesis(ctx: Ctx, h: StageHandle): Promise<StageResult> {
   const col = ctx.s.colony!;
-  let seedPng = ctx.mem.seedPng ?? (await ctx.deps.sink.read(col.seed.url));
-  let seedImg = ctx.mem.seed ?? decodePng(seedPng);
-  let seedAsset = col.seed.assetId;
+  const prior = ctx.s.runs.morphogenesis;
+  // Colony remains the visible, archival 32×32 artifact. Tessa receives its own compact image,
+  // deterministically rendered from the same measured Bloch vectors and genome.
+  let seedImg: RGBAImage;
+  let seedPng: Uint8Array;
+  let inputImage = prior?.inputImage;
+  let seedAsset = prior?.inputs?.image ?? inputImage?.assetId;
+  if (inputImage?.url && seedAsset) {
+    const saved = await readPng(ctx, inputImage, "Tessa input");
+    seedPng = saved.png;
+    seedImg = saved.rgba;
+  } else if (ctx.resumeJobs.morphogenesis && seedAsset) {
+    // A job started before the compact-input rollout has only `inputs.image`. Reconnect to that
+    // exact 32×32 asset; uploading a new 16×16 image before polling would defeat same-job resume.
+    const saved = await readPng(ctx, col.seed, "legacy Tessa input");
+    seedPng = saved.png;
+    seedImg = saved.rgba;
+    inputImage = { ...col.seed, assetId: seedAsset };
+  } else {
+    seedImg = renderColonySeed(col.bloch, col.correlations, ctx.s.genome!.bytes, TESSA_INPUT_SIZE);
+    seedPng = encodePng(seedImg);
+    inputImage = undefined;
+    seedAsset = undefined;
+  }
   let retinted = "";
   if (!seedAsset) {
     // Atlas verifies uploaded images (content labelling) and rejects some abstract patterns with 422
     // "not a valid asset". The rejection is content-specific, so fall back to deterministic re-tints.
     for (let i = 0; ; i++) {
       try {
-        seedAsset = await h.upload(seedPng, `${ctx.s.id}-seed${i ? `-t${i}` : ""}.png`, "image/png");
+        seedAsset = await h.upload(seedPng, `${ctx.s.id}-tessa-seed${i ? `-t${i}` : ""}.png`, "image/png");
         break;
       } catch (e) {
         if (!isRejectedAsset(e) || i >= SEED_RETINTS.length) throw e;
         const [hue, sat] = SEED_RETINTS[i];
         log(ctx, "warn", `Atlas rejected the seed image (${(e as Error).message}); re-tinting hue ${hue}° × sat ${sat}`, "morphogenesis");
-        const base = ctx.mem.seed ?? decodePng(await ctx.deps.sink.read(col.seed.url));
+        const base = renderColonySeed(col.bloch, col.correlations, ctx.s.genome!.bytes, TESSA_INPUT_SIZE);
         seedImg = retint(base, hue, sat) as RGBAImage;
         seedPng = encodePng(seedImg);
         retinted = ` · seed re-tinted (hue ${hue}°, sat ×${sat}) after Atlas rejected the original upload`;
       }
     }
-    let seedUrl = col.seed.url;
-    if (retinted) {
-      await ctx.deps.sink.write(ctx.s.id, "seed.original.png", ctx.mem.seedPng ?? (await ctx.deps.sink.read(col.seed.url)), "image/png");
-      seedUrl = await ctx.deps.sink.write(ctx.s.id, "seed.png", seedPng, "image/png");
-    }
-    ctx.mem.seed = seedImg;
-    ctx.mem.seedPng = seedPng;
-    patch(ctx, { colony: { ...col, seed: { ...col.seed, url: seedUrl, assetId: seedAsset } } });
+    const url = await ctx.deps.sink.write(ctx.s.id, "tessa-input.png", seedPng, "image/png");
+    inputImage = { url, assetId: seedAsset, width: seedImg.width, height: seedImg.height };
+    setRun(ctx, "morphogenesis", { inputImage });
   }
+  if (!seedAsset || !inputImage) throw new Error("Tessa input asset missing after upload");
   const machine = ctx.controls.machine;
-  const params = { machine, shots: TESSA_SHOTS };
-  const out = await h.job({ input_files: { image: seedAsset }, params });
+  // A manual retry after the 64-shot fallback should stay reduced. A resume is matched to the
+  // existing remote job by `handle`, so this body is provenance rather than a fresh submission.
+  const firstShots = prior?.params?.shots === TESSA_FALLBACK_SHOTS ? TESSA_FALLBACK_SHOTS : TESSA_SHOTS;
+  const firstParams = { machine, shots: firstShots };
+  const totalMaxAttempts = ctx.resumeJobs.morphogenesis
+    ? prior?.maxAttempts ?? (firstShots === TESSA_SHOTS ? 2 : 1)
+    : firstShots === TESSA_SHOTS ? 2 : 1;
+  let out: JobOutcome;
+  try {
+    out = await h.job({ input_files: { image: seedAsset }, params: firstParams }, { maxAttempts: 1, totalMaxAttempts });
+  } catch (e) {
+    // Atlas makes `engine_timeout` terminal. One intentionally cheaper follow-up is useful; a
+    // generic retry would repeat the exact same request that just timed out upstream.
+    if (firstShots !== TESSA_SHOTS || !(e instanceof MothError) || e.type !== "engine_timeout" || e.status !== 200 || !e.jobId) throw e;
+    const fallbackParams = { machine, shots: TESSA_FALLBACK_SHOTS };
+    log(ctx, "warn", `Tessa reached its engine limit at ${TESSA_SHOTS} shots; retrying once at ${TESSA_FALLBACK_SHOTS} shots`, "morphogenesis");
+    out = await h.job({ input_files: { image: seedAsset }, params: fallbackParams }, { maxAttempts: 1, attemptOffset: 1, totalMaxAttempts: 2 });
+  }
   const { bytes, output } = await h.download(out, (o) => /^image\//.test(o.content_type) || /\.png$/i.test(o.filename), "skin image");
   const skinImg = decodePng(bytes);
   ctx.mem.skin = skinImg;
   ctx.mem.skinPng = bytes;
   const url = await ctx.deps.sink.write(ctx.s.id, "skin.png", bytes, "image/png");
   patch(ctx, { skin: { url, assetId: output.output_asset_id, width: skinImg.width, height: skinImg.height } });
+  // `runJob` reports the successful remote attempt. Morphogenesis can intentionally have one
+  // failed 128-shot attempt before its 64-shot fallback, so its visible elapsed time must cover
+  // the full stage rather than making the user’s earlier wait disappear from telemetry.
+  const stageStartedAt = ctx.s.runs.morphogenesis?.startedAt;
+  if (stageStartedAt != null) setRun(ctx, "morphogenesis", { latencyMs: Math.max(0, Date.now() - stageStartedAt) });
   const px = skinImg.width * skinImg.height;
   const fieldQubits = Math.ceil(Math.log2(px)) + 1;
   patchMetrics(ctx, { qubitsUsed: (ctx.s.metrics?.qubitsUsed ?? 0) + 3 * fieldQubits });
   const d = meanLumaDelta(seedImg, skinImg);
   return {
-    note: `${seedImg.width}×${seedImg.height} seed → colour-sphere encode/measure/decode on ${machine === "aer" ? "aer (ideal)" : `${machine} (IBM noise model)`}, ${TESSA_SHOTS} shots/field → skin ${skinImg.width}×${skinImg.height}${d != null ? ` · mean |ΔL| ${fx(d, 3)} vs seed` : ""}${retinted}`,
+    note: `${seedImg.width}×${seedImg.height} Tessa input (from 32×32 colony seed) → colour-sphere encode/measure/decode on ${machine === "aer" ? "aer (ideal)" : `${machine} (IBM noise model)`}, ${(ctx.s.runs.morphogenesis?.params?.shots as number | undefined) ?? TESSA_SHOTS} shots/field → skin ${skinImg.width}×${skinImg.height}${d != null ? ` · mean |ΔL| ${fx(d, 3)} vs input` : ""}${retinted}`,
   };
 }
 
@@ -520,6 +623,7 @@ async function decoherence(ctx: Ctx, h: StageHandle): Promise<StageResult> {
     const png = ctx.mem.skinPng ?? (await ctx.deps.sink.read(skin.url));
     imageAsset = await h.upload(png, `${ctx.s.id}-skin.png`, "image/png");
     reuploaded = true;
+    patch(ctx, { skin: { ...skin, assetId: imageAsset } });
   }
   let out: JobOutcome;
   try {
@@ -531,6 +635,7 @@ async function decoherence(ctx: Ctx, h: StageHandle): Promise<StageResult> {
     const png = ctx.mem.skinPng ?? (await ctx.deps.sink.read(skin.url));
     imageAsset = await h.upload(png, `${ctx.s.id}-skin.png`, "image/png");
     reuploaded = true;
+    patch(ctx, { skin: { ...skin, assetId: imageAsset } });
     out = await h.job({ input_files: { image: imageAsset, mask: maskAsset }, params });
   }
   const { bytes, output } = await h.download(out, (o) => /^image\//.test(o.content_type) || /\.png$/i.test(o.filename), "tissue image");
@@ -582,22 +687,8 @@ function shaderParams(ctx: Ctx) {
   const meanLuma = m.meanLuma ?? 0.5;
   const hueSkew = m.hueSkew ?? 0;
   const sigma = Math.sqrt(ctx.s.soma?.variance ?? 0);
-  const normVariance = clamp(2 * sigma, 0, 1); // σ of a 0..1 field is ≤ 0.5
-  const layers = 1 + Math.round(3 * normVariance);
-  const g5 = ctx.s.genome!.bytes[5];
-  const wantRays = layers + 4 + (g5 % 4);
-  const incoming_rays = Math.max(layers, Math.min(wantRays, FAST_SHADER_MAX_RAYS, SHADER_MAX_RAYS[layers] ?? 8));
-  const style: MembraneArtifact["params"]["style"] = entropy < 3 ? "3-body" : entropy < 5 ? "peaked" : entropy < 6.5 ? "frustrated" : "constrained";
-  const params: MembraneArtifact["params"] = {
-    reflectance: round(clamp(0.08 + 0.6 * meanLuma, 0.05, 0.9)),
-    absorption: round(clamp(entropy / 8, 0.1, 0.98)),
-    layers,
-    incoming_rays,
-    interaction: round(clamp(2 * hueSkew, -2, 2)),
-    style,
-    resolution: LUT_RESOLUTION,
-  };
-  return { params, entropy, meanLuma, hueSkew, sigma, wantRays, g5 };
+  const params = deriveMembraneParams(ctx.s, ctx.controls);
+  return { params, entropy, meanLuma, hueSkew, sigma };
 }
 
 /** 5 · Membrane — entanglement-shader-v1: params from tissue entropy/luma/hue + soma variance → R/T LUTs + GLSL. */
@@ -620,9 +711,8 @@ async function membrane(ctx: Ctx, h: StageHandle): Promise<StageResult> {
   const art: MembraneArtifact = { params, rLut: lut(z.rLut), tLut: lut(z.tLut), glsl: z.glsl };
   patch(ctx, { membrane: art });
   patchMetrics(ctx, { qubitsUsed: (ctx.s.metrics?.qubitsUsed ?? 0) + params.layers + params.incoming_rays });
-  const rayCap = params.incoming_rays < d.wantRays ? ` (capped from ${d.wantRays} for fast generation)` : "";
   return {
-    note: `reflectance ${fx(params.reflectance)} ← mean luma ${fx(d.meanLuma)} · absorption ${fx(params.absorption)} ← entropy ${fx(d.entropy)} bits · layers ${params.layers} ← soma σ ${fx(d.sigma, 3)} · rays ${params.incoming_rays} ← layers+4+genome[5]%4${rayCap} · interaction ${fx(params.interaction, 2, true)} ← hue skew ${fx(d.hueSkew, 2, true)} · style ${params.style} → ${art.rLut.width}×${art.rLut.height} R/T LUTs`,
+    note: `reflectance ${fx(params.reflectance)} ← mean luma ${fx(d.meanLuma)} + genome[4] · absorption ${fx(params.absorption)} ← entropy ${fx(d.entropy)} bits + genome[3] · layers ${params.layers} ← soma σ ${fx(d.sigma, 3)} + genome[1] · rays ${params.incoming_rays} ← genome[5], capped at 4 for fast generation · interaction ${fx(params.interaction, 2, true)} ← entanglement ${fx(ctx.controls.entanglement)} × hue skew ${fx(d.hueSkew, 2, true)} + genome[2] · style ${params.style} ← entropy bucket + genome[0] → ${art.rLut.width}×${art.rLut.height} R/T LUTs`,
   };
 }
 
@@ -727,8 +817,16 @@ async function runStages(ctx: Ctx, stages: StageId[]): Promise<Specimen> {
   }
 }
 
-function makeCtx(deps: ChainDeps, s: Specimen, controls: Controls, mode: ChainMode, wounds: Wound[], opts: ChainOptions): Ctx {
-  return { deps, s, controls, mode, wounds, signal: opts.signal, opts, mem: {} };
+function makeCtx(
+  deps: ChainDeps,
+  s: Specimen,
+  controls: Controls,
+  mode: ChainMode,
+  wounds: Wound[],
+  opts: ChainOptions,
+  resumeJobs: Ctx["resumeJobs"] = {},
+): Ctx {
+  return { deps, s, controls, mode, wounds, signal: opts.signal, opts, resumeJobs, mem: {} };
 }
 
 /** Full chain from genesis. */
@@ -795,7 +893,8 @@ export async function evolveChain(
 }
 
 /**
- * Continue a halted specimen from its first stage that is not done/cached (Node resume after a flaky engine).
+ * Continue a halted specimen from its first stage that is not done/cached. When a known remote job
+ * outlived the local client, reconnect to it; a terminal engine failure starts a deliberate new attempt.
  */
 export async function resumeChain(deps: ChainDeps, partial: Specimen, opts: ChainOptions = {}): Promise<Specimen> {
   const firstTodo = STAGE_ORDER.findIndex((id) => {
@@ -805,9 +904,23 @@ export async function resumeChain(deps: ChainDeps, partial: Specimen, opts: Chai
   if (firstTodo < 0) return partial;
   const toRun = STAGE_ORDER.slice(firstTodo);
   const s = structuredClone(partial);
-  for (const id of toRun) s.runs[id] = { id, status: "idle", attempt: 0 };
+  const prior = partial.runs[toRun[0]];
+  // These failures leave the Atlas terminal state unknown or completed-but-unavailable, so this id is
+  // the exact work already paid for. Terminal engine failures start a fresh attempt under normal retry policy.
+  const resumeJobs: Ctx["resumeJobs"] =
+    prior?.status === "failed" && isResumableRemoteJobError(prior.errorType) && prior.jobId
+      ? { [toRun[0]]: { jobId: prior.jobId, startedAt: prior.startedAt, attempt: Math.max(1, prior.attempt) } }
+      : {};
+  for (const id of toRun) {
+    const keepRemoteJob = resumeJobs[id];
+    s.runs[id] = keepRemoteJob
+      ? { ...(partial.runs[id] ?? { id, attempt: keepRemoteJob.attempt }), id, status: "idle", attempt: keepRemoteJob.attempt, jobId: keepRemoteJob.jobId, startedAt: keepRemoteJob.startedAt }
+      // Keep the first failed stage's exact input/params around for a deliberate retry. Later
+      // stages are idle shells, and their next run overwrites any old values as usual.
+      : { ...(partial.runs[id] ?? { id, attempt: 0 }), id, status: "idle" };
+  }
   deps.reporter?.setSpecimen?.(structuredClone(s));
   const mode: ChainMode = s.generation > 0 ? "evolving" : "growing";
   deps.reporter?.setMode?.(mode, toRun[0]);
-  return runStages(makeCtx(deps, s, s.controls, mode, s.wounds ?? [], opts), toRun);
+  return runStages(makeCtx(deps, s, s.controls, mode, s.wounds ?? [], opts, resumeJobs), toRun);
 }

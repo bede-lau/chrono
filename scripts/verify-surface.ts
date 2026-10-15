@@ -71,10 +71,21 @@ try {
   const after = surface.displacement(d.x, d.y, d.z, 1);
   const wave = (angle: number) => {
     const x = angle - age * 0.85;
-    return Math.cos(x * 20) * Math.exp(-x * x * 22 - age * 0.95) * 0.032 - Math.exp(-angle * angle * 70 - age * 3.2) * 0.055;
+    return Math.cos(x * 22) * Math.exp(-x * x * 24 - age * 0.74) * 0.052 - Math.exp(-angle * angle * 86 - age * 2.35) * 0.092;
   };
   const expected = strength * (wave(0) + state.controls.entanglement * 0.85 * wave(Math.PI));
   assert.ok(Math.abs(after - before - expected) < 1e-7, 'CPU ripple includes the direct wound and entangled antipode');
+
+  // The exact local touch is visible while queued, but must disappear as soon
+  // as a successful Evolve clears its Zustand input; the returned tissue/mask
+  // owns the lasting scar from that point onward.
+  const queuedTouch = { u: 0.25, v: 0.5, strength, t: now - age * 1000 };
+  state.pendingWounds = [queuedTouch];
+  rig.update(0, now, state);
+  assert.equal(rig.material.uniforms.uWoundCount.value, 1, 'queued touch shares one local ripple');
+  state.pendingWounds = [];
+  rig.update(0, now, state);
+  assert.equal(rig.material.uniforms.uWoundCount.value, 0, 'consumed touch clears its local ripple immediately');
 
   const field = somaField({ size: 4, variance: 5 / 36, grid: Array.from({ length: 16 }, (_, i) => 1 - Math.floor(i / 4) / 3) });
   assert.ok(field);

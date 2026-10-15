@@ -5,7 +5,7 @@ import { Check, X } from "lucide-react";
 import { STAGES, type StageMeta, type StageRun, type StageStatus } from "@/lib/chain/types";
 import { useChrono } from "@/lib/store";
 import { openStage } from "./actions";
-import { MAX_ATTEMPTS, formatElapsed, formatLatency, isActive, isComplete, pad2, statusText } from "./format";
+import { attemptLimit, formatElapsed, formatLatency, isActive, isComplete, isRecoverableRun, pad2, statusText } from "./format";
 import { EASE_OUT, cx } from "./primitives";
 import { selectEvolutionVisible, useUi } from "./uiStore";
 
@@ -90,6 +90,7 @@ function Elapsed({ since }: { since?: number }) {
 function StatusLine({ run }: { run?: StageRun }) {
   const s = run?.status ?? "idle";
   const base = "flex items-center justify-center gap-1 font-mono text-[10.5px] leading-[14px] tabular whitespace-nowrap";
+  if (isRecoverableRun(run)) return <span className={cx(base, "text-fg-2")}>Resume</span>;
   switch (s) {
     case "done":
       return (
@@ -110,7 +111,7 @@ function StatusLine({ run }: { run?: StageRun }) {
     case "retrying":
       return (
         <span className={cx(base, "text-fg-1")}>
-          Retry {run?.attempt ?? 1}/{MAX_ATTEMPTS}
+          Retry {run?.attempt ?? 1}/{attemptLimit(run)}
         </span>
       );
     case "running":
@@ -188,7 +189,7 @@ const Node = memo(function Node({
           compact ? "w-full" : "w-full max-w-[140px]",
         )}
       >
-        <Marker status={status} selected={selected} />
+        <Marker status={isRecoverableRun(run) ? "idle" : status} selected={selected} />
         <span className={cx("mt-2 flex max-w-full items-baseline gap-1.5 whitespace-nowrap", compact ? "text-[11.5px]" : "text-[12px]")}>
           <span className="font-mono text-[10px] tabular text-fg-3">{pad2(stage.index + 1)}</span>
           <span
@@ -212,11 +213,12 @@ const Node = memo(function Node({
 /* ---------------------------------------------------------------- rail */
 
 function announce(stage: StageMeta, run: StageRun): string | null {
+  if (isRecoverableRun(run)) return `${stage.title}: ${statusText(run)}. Resume reconnects to the existing job`;
   switch (run.status) {
     case "running":
       return `${stage.title} running on ${stage.engineName}`;
     case "retrying":
-      return `${stage.title} retrying, attempt ${run.attempt} of ${MAX_ATTEMPTS}`;
+      return `${stage.title} retrying, attempt ${run.attempt} of ${attemptLimit(run)}`;
     case "done":
       return `${stage.title} done${run.latencyMs != null ? ` in ${formatLatency(run.latencyMs)}` : ""}`;
     case "failed":

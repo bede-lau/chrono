@@ -18,7 +18,13 @@ import {
   type StageRun,
   type Wound,
   type ArchiveIndex,
+  type SpecimenInteractionMode,
+  type SurfaceGesture,
+  type RhythmState,
+  type LightProbe,
 } from "./chain/types";
+
+import { clamp, freshRhythm, nextRhythm } from "./interactions";
 
 export type ChainMode = "idle" | "growing" | "evolving";
 
@@ -45,6 +51,18 @@ export interface ChronoState {
   lens: LensState;
   /** Linked hover point shared between the organism and the panel's 2D previews. */
   probe: Probe | null;
+  /** Local non-wounding stimulus; never sent to Atlas or saved in a specimen. */
+  pulseAt: number;
+  triggerPulse: () => void;
+  interactionMode: SpecimenInteractionMode;
+  gesture: SurfaceGesture | null;
+  rhythm: RhythmState;
+  lightProbe: LightProbe | null;
+  setInteractionMode: (mode: SpecimenInteractionMode) => void;
+  setGesture: (gesture: SurfaceGesture | null) => void;
+  tapRhythm: (now?: number) => void;
+  setRhythmBpm: (bpm: number) => void;
+  setLightProbe: (point: LightProbe | null) => void;
 
   setLens: (p: Partial<LensState>) => void;
   setProbe: (p: Probe | null) => void;
@@ -81,12 +99,26 @@ export const useChrono = create<ChronoState>((set) => ({
   log: [],
   lens: LENS_OFF,
   probe: null,
+  pulseAt: 0,
+  triggerPulse: () => set({ pulseAt: Date.now() }),
+  interactionMode: "touch",
+  gesture: null,
+  rhythm: freshRhythm(),
+  lightProbe: null,
+  setInteractionMode: (interactionMode) => set((s) => ({ interactionMode, gesture: null, probe: null, lightProbe: null, rhythm: freshRhythm(s.rhythm.bpm) })),
+  setGesture: (gesture) => set((s) => ({ gesture: s.specimen && s.mode === "idle" ? gesture : null })),
+  tapRhythm: (now = Date.now()) => set((s) => s.specimen && s.mode === "idle" && s.interactionMode === "rhythm" ? { rhythm: nextRhythm(s.rhythm, now) } : {}),
+  setRhythmBpm: (bpm) => set({ rhythm: freshRhythm(Math.round(clamp(bpm, 60, 140))) }),
+  setLightProbe: (point) => set({ lightProbe: point ? { x: clamp(point.x, -1, 1), y: clamp(point.y, -1, 1) } : null }),
 
   setLens: (p) => set((s) => ({ lens: { ...s.lens, ...p } })),
   setProbe: (probe) => set({ probe }),
   resetToNew: () =>
-    set({ specimen: null, runs: {}, pendingWounds: [], mode: "idle", activeStage: null, selectedStage: null, lens: LENS_OFF, probe: null }),
-  setSpecimen: (specimen) => set({ specimen, runs: specimen?.runs ?? {} }),
+    set({ specimen: null, runs: {}, pendingWounds: [], mode: "idle", activeStage: null, selectedStage: null, lens: LENS_OFF, probe: null, pulseAt: 0, gesture: null, rhythm: freshRhythm(), lightProbe: null }),
+  setSpecimen: (specimen) => set((s) => ({ specimen, runs: specimen?.runs ?? {},
+    ...(s.specimen?.id !== specimen?.id || s.specimen?.generation !== specimen?.generation
+      ? { gesture: null, rhythm: freshRhythm(s.rhythm.bpm), lightProbe: null, probe: null } : {}),
+  })),
   patchSpecimen: (p) => set((s) => (s.specimen ? { specimen: { ...s.specimen, ...p } } : {})),
   setArchive: (archive) => set({ archive }),
   setRun: (id, r) =>
@@ -102,7 +134,7 @@ export const useChrono = create<ChronoState>((set) => ({
     set((s) => ({
       runs: Object.fromEntries(Object.entries(s.runs).filter(([k]) => keep.includes(k as StageId))),
     })),
-  setMode: (mode, activeStage = null) => set({ mode, activeStage }),
+  setMode: (mode, activeStage = null) => set({ mode, activeStage, ...(mode !== "idle" ? { gesture: null, rhythm: freshRhythm(), lightProbe: null } : {}) }),
   setControls: (c) => set((s) => ({ controls: { ...s.controls, ...c } })),
   addWound: (w) => set((s) => ({ pendingWounds: [...s.pendingWounds, w].slice(-24) })),
   clearWounds: () => set({ pendingWounds: [] }),

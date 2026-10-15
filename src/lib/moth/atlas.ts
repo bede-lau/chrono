@@ -38,9 +38,20 @@ export interface SubmittedJob {
   submitted_at?: string;
 }
 
+/** The only identity fields needed to prove `/me` is a real authenticated Atlas response. */
+interface MothIdentity {
+  id: string;
+  platform_role: string;
+  features: string[];
+}
+
+export function configuredMothBase(): string {
+  return (process.env.MOTH_API_BASE || DEFAULT_MOTH_BASE).replace(/\/+$/, "");
+}
+
 export function readServerEnv(): { apiKey: string; base: string } {
   const apiKey = process.env.MOTH_API_KEY;
-  const base = (process.env.MOTH_API_BASE || DEFAULT_MOTH_BASE).replace(/\/+$/, "");
+  const base = configuredMothBase();
   if (!apiKey) {
     throw new MothError({ status: 500, type: "missing_api_key", message: "MOTH_API_KEY is not set on the server", retryable: false });
   }
@@ -59,6 +70,11 @@ export class AtlasClient {
     this.base = (opts.base ?? env.base).replace(/\/+$/, "");
     this.f = opts.fetch ?? fetch;
     this.requestTimeoutMs = opts.requestTimeoutMs ?? 60_000;
+  }
+
+  /** Upstream problem details are untrusted and must never reflect a visitor's bearer credential. */
+  private redactApiKey(value: string): string {
+    return value.split(this.apiKey).join("[redacted]");
   }
 
   private async call(path: string, init: Omit<RequestInit, "signal"> & { signal?: AbortSignal } = {}, context = path): Promise<Response> {
@@ -81,13 +97,22 @@ export class AtlasClient {
       if (!res.ok) throw await errorFromResponse(res, context);
       return res;
     } catch (e) {
-      if (e instanceof MothError) throw e;
+      if (e instanceof MothError) {
+        throw new MothError({
+          status: e.status,
+          type: this.redactApiKey(e.type),
+          message: this.redactApiKey(e.message),
+          retryable: e.retryable,
+          jobId: e.jobId,
+          engineId: e.engineId,
+        });
+      }
       if (init.signal?.aborted) throw abortError();
       const timedOut = ctrl.signal.aborted;
       throw new MothError({
         status: 0,
         type: timedOut ? "request_timeout" : "network_error",
-        message: `${context}: ${timedOut ? `no response in ${this.requestTimeoutMs} ms` : (e as Error)?.message ?? String(e)}`,
+        message: this.redactApiKey(`${context}: ${timedOut ? `no response in ${this.requestTimeoutMs} ms` : (e as Error)?.message ?? String(e)}`),
         retryable: true,
       });
     } finally {
@@ -122,11 +147,11 @@ export class AtlasClient {
       });
     } catch (e) {
       if (signal?.aborted) throw abortError();
-      throw new MothError({ status: 0, type: "network_error", message: `upload ${filename}: ${(e as Error).message}`, retryable: true });
+      throw new MothError({ status: 0, type: "network_error", message: this.redactApiKey(`upload ${filename}: ${(e as Error).message}`), retryable: true });
     }
     if (!putRes.ok) {
       const text = await putRes.text().catch(() => "");
-      throw new MothError({ status: putRes.status, type: "upload_failed", message: `upload ${filename}: ${putRes.status} ${text.slice(0, 200)}` });
+      throw new MothError({ status: putRes.status, type: "upload_failed", message: this.redactApiKey(`upload ${filename}: ${putRes.status} ${text.slice(0, 200)}`) });
     }
     await this.call(`/assets/${encodeURIComponent(created.asset_id)}/complete`, { method: "POST", signal }, `complete asset ${filename}`);
     return created.asset_id;
@@ -148,6 +173,17 @@ export class AtlasClient {
     return this.json<MothJobResult>(`/jobs/${encodeURIComponent(jobId)}/result`, { signal }, `result ${jobId}`);
   }
 
+  /**
+   * Read-only credential check. We deliberately discard the returned identity so a browser can learn
+   * only whether its key works, not account information.
+   */
+  async verifyCredentials(signal?: AbortSignal): Promise<void> {
+    const identity = await this.json<unknown>("/me", { signal }, "verify Moth API key");
+    if (!isMothIdentity(identity)) {
+      throw new MothError({ status: 502, type: "bad_upstream", message: "Moth returned an invalid identity response", retryable: true });
+    }
+  }
+
   /** Presigned GET url for an asset (input or output). */
   async downloadUrl(assetId: string, signal?: AbortSignal): Promise<string> {
     const j = await this.json<{ download_url: string }>(
@@ -167,11 +203,21 @@ export class AtlasClient {
       res = await this.f(url, { signal, cache: "no-store" });
     } catch (e) {
       if (signal?.aborted) throw abortError();
-      throw new MothError({ status: 0, type: "network_error", message: `fetch asset ${assetId}: ${(e as Error).message}`, retryable: true });
+      throw new MothError({ status: 0, type: "network_error", message: this.redactApiKey(`fetch asset ${assetId}: ${(e as Error).message}`), retryable: true });
     }
     if (!res.ok) {
       throw new MothError({ status: res.status, type: "download_failed", message: `fetch asset ${assetId}: ${res.status}` });
     }
     return res;
   }
+}
+
+function isMothIdentity(value: unknown): value is MothIdentity {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const identity = value as Record<string, unknown>;
+  return (
+    typeof identity.id === "string" && identity.id.length > 0 &&
+    typeof identity.platform_role === "string" && identity.platform_role.length > 0 &&
+    Array.isArray(identity.features) && identity.features.every((feature) => typeof feature === "string")
+  );
 }

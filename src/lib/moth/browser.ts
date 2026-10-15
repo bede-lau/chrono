@@ -5,13 +5,26 @@
 import { MothError, errorFromResponse, abortError } from "./errors";
 import type { MothJobResult, MothJobStatus, MothOutput, MothTransport } from "./transport";
 
-export function createBrowserTransport(base = "/api/moth", opts: { signal?: AbortSignal } = {}): MothTransport {
+export interface BrowserTransportOptions {
+  signal?: AbortSignal;
+  /** An accepted, session-only Moth key. It is sent only to our same-origin proxy. */
+  apiKey?: string;
+}
+
+export function createBrowserTransport(base = "/api/moth", opts: BrowserTransportOptions = {}): MothTransport {
   const root = base.replace(/\/+$/, "");
+  const apiKey = opts.apiKey?.trim();
+
+  function withAuthorization(headers?: HeadersInit): Headers {
+    const next = new Headers(headers);
+    if (apiKey) next.set("Authorization", `Bearer ${apiKey}`);
+    return next;
+  }
 
   async function call(path: string, init: RequestInit, context: string): Promise<Response> {
     let res: Response;
     try {
-      res = await fetch(`${root}${path}`, { ...init, cache: "no-store", signal: opts.signal });
+      res = await fetch(`${root}${path}`, { ...init, headers: withAuthorization(init.headers), cache: "no-store", signal: opts.signal });
     } catch (e) {
       if (opts.signal?.aborted) throw abortError();
       throw new MothError({ status: 0, type: "network_error", message: `${context}: ${(e as Error).message}`, retryable: true });

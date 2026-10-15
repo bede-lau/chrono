@@ -3,9 +3,10 @@
  * Spectrum — OWNER: audio agent.
  * Larger canvas spectrum: log-frequency bars, white 60% alpha, DPR-aware.
  */
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { useChrono } from "@/lib/store";
 import { getSpectrum } from "@/lib/audio/player";
+import { useVisualTicker } from "./useVisualTicker";
 
 const RAW_BINS = 128;
 const BARS = 48;
@@ -26,9 +27,7 @@ export default function Spectrum({ className }: { className?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rawRef = useRef(new Uint8Array(RAW_BINS));
 
-  useEffect(() => {
-    let raf = 0;
-    const draw = () => {
+  useVisualTicker(() => {
       const canvas = canvasRef.current;
       const ctx2d = canvas?.getContext("2d");
       if (canvas && ctx2d) {
@@ -65,11 +64,7 @@ export default function Spectrum({ className }: { className?: string }) {
           ctx2d.fillRect(i * (barW + gap), h - barH, barW, barH);
         }
       }
-      raf = requestAnimationFrame(draw);
-    };
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, [audioEnabled]);
+  }, audioEnabled);
 
   return <canvas ref={canvasRef} className={className ?? "h-24 w-full"} aria-hidden="true" />;
 }

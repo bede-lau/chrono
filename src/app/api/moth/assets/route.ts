@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   if (bytes.byteLength > MAX_UPLOAD_BYTES) return jsonError(413, "too_large", `max ${MAX_UPLOAD_BYTES} bytes`, false);
 
   try {
-    const asset_id = await proxyClient().uploadAsset(bytes, filename, contentType, request.signal);
+    const asset_id = await proxyClient(request).uploadAsset(bytes, filename, contentType, request.signal);
     return noStoreJson({ asset_id, filename, content_type: contentType, size_bytes: bytes.byteLength });
   } catch (e) {
     return errorResponse(e);

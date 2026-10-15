@@ -34,9 +34,39 @@ let currentUrl: string | null = null;
 let playbackRequestId = 0;
 const bufferCache = new Map<string, AudioBuffer>();
 let enabled = false;
+let muteTimer: ReturnType<typeof setTimeout> | undefined;
 
 const CROSSFADE_SEC = 2.0;
 const MASTER_FADE_SEC = 0.6;
+const MAX_RHYTHM_VOICES = 8;
+
+interface RhythmVoice {
+  oscillator: OscillatorNode;
+  gain: GainNode;
+}
+
+const rhythmVoices = new Set<RhythmVoice>();
+
+function stopRhythmVoices(): void {
+  if (!ctx) {
+    rhythmVoices.clear();
+    return;
+  }
+  const now = ctx.currentTime;
+  for (const voice of rhythmVoices) {
+    voice.oscillator.onended = null;
+    try {
+      voice.gain.gain.cancelScheduledValues(now);
+      voice.gain.gain.setValueAtTime(0, now);
+      voice.oscillator.stop(now);
+    } catch {
+      // Already ended or already scheduled to stop.
+    }
+    voice.oscillator.disconnect();
+    voice.gain.disconnect();
+  }
+  rhythmVoices.clear();
+}
 
 function build(context: AudioContext) {
   panner = context.createStereoPanner();
@@ -76,7 +106,7 @@ function build(context: AudioContext) {
 
 /** Lazily create (or resume) the AudioContext. Safe to call outside a gesture; cheapest to call
  *  synchronously inside one (e.g. the AudioToggle click handler) so autoplay policies are happy. */
-export function ensureAudioContext(): AudioContext | null {
+export function ensureAudioContext(resume = true): AudioContext | null {
   if (typeof window === "undefined") return null;
   const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return null;
@@ -84,7 +114,8 @@ export function ensureAudioContext(): AudioContext | null {
     ctx = new Ctor();
     build(ctx);
   }
-  if (ctx.state === "suspended") void ctx.resume();
+  if (resume && ctx.state === "suspended") void ctx.resume();
+  else if (!resume && !enabled && ctx.state === "running") void ctx.suspend();
   return ctx;
 }
 
@@ -94,7 +125,7 @@ export function unlockAudioContext(): void {
 }
 
 async function loadBuffer(url: string): Promise<AudioBuffer | null> {
-  const context = ensureAudioContext();
+  const context = ensureAudioContext(enabled);
   if (!context) return null;
   const cached = bufferCache.get(url);
   if (cached) return cached;
@@ -103,6 +134,8 @@ async function loadBuffer(url: string): Promise<AudioBuffer | null> {
     const arr = await res.arrayBuffer();
     const buf = await context.decodeAudioData(arr.slice(0));
     bufferCache.set(url, buf);
+    // A handful of recent loops is sufficient for crossfades; generations must not retain unlimited PCM.
+    while (bufferCache.size > 4) bufferCache.delete(bufferCache.keys().next().value!);
     return buf;
   } catch {
     return null;
@@ -120,6 +153,9 @@ function equalPowerCurve(steps: number, rising: boolean): Float32Array {
 
 /** Stop the specimen loop when cleared; otherwise load a WAV and crossfade from the previous loop. */
 export function setUrl(url: string | null): void {
+  // A specimen can be selected while muted; do not create a context or fetch its audio until
+  // the user enables playback. The hook calls again with the same URL after unmuting.
+  if (url && !enabled) return;
   if (url === currentUrl) return;
   currentUrl = url;
   const requestId = ++playbackRequestId;
@@ -143,7 +179,7 @@ export function setUrl(url: string | null): void {
     return;
   }
 
-  const context = ensureAudioContext();
+  const context = ensureAudioContext(enabled);
   if (!context || !voiceA || !voiceB) return;
 
   void loadBuffer(url).then((buffer) => {
@@ -181,12 +217,20 @@ export function setUrl(url: string | null): void {
 /** Master enable/disable fade (click-free). Also unlocks the AudioContext. */
 export function setEnabled(on: boolean): void {
   enabled = on;
+  if (!on) stopRhythmVoices();
+  clearTimeout(muteTimer);
+  if (!on && !ctx) return;
   const context = ensureAudioContext();
   if (!context || !master) return;
   const now = context.currentTime;
   master.gain.cancelScheduledValues(now);
   master.gain.setTargetAtTime(on ? 1 : 0, now, MASTER_FADE_SEC / 3);
+  if (!on) muteTimer = setTimeout(() => {
+    if (!enabled && context.state === "running") void context.suspend();
+  }, MASTER_FADE_SEC * 1000 + 100);
 }
+
+let spectrumBuf: Uint8Array<ArrayBuffer> | null = null;
 
 /** Fill `out` with frequency-domain data (0..255), resampled to out.length. */
 export function getSpectrum(out: Uint8Array): void {
@@ -194,7 +238,8 @@ export function getSpectrum(out: Uint8Array): void {
     out.fill(0);
     return;
   }
-  const full = new Uint8Array(analyser.frequencyBinCount);
+  if (!spectrumBuf || spectrumBuf.length !== analyser.frequencyBinCount) spectrumBuf = new Uint8Array(analyser.frequencyBinCount);
+  const full = spectrumBuf;
   analyser.getByteFrequencyData(full);
   if (out.length === full.length) {
     out.set(full);
@@ -270,4 +315,56 @@ export function click(strength = 1): void {
 
   src.start(now);
   src.stop(now + dur + 0.02);
+}
+
+/**
+ * Play a brief, soft pitch cue for a successful rhythm tap. The optional quieter answer
+ * turns a streak into a small call-and-response phrase. This shares the normal output path
+ * and mute gate, and every oscillator is stopped and disconnected after its envelope ends.
+ */
+export function rhythmNote(streak = 0, accuracy: number | null = null): void {
+  if (!enabled || (typeof document !== "undefined" && document.hidden)) return;
+  const context = ensureAudioContext();
+  const output = panner;
+  if (!context || !output || !master) return;
+
+  const safeStreak = Number.isFinite(streak) ? Math.max(0, Math.min(32, streak)) : 0;
+  const safeAccuracy = accuracy !== null && Number.isFinite(accuracy)
+    ? Math.max(0, Math.min(1, accuracy))
+    : 0.65;
+  const baseFrequency = 330 * Math.pow(2, Math.min(12, safeStreak) / 24);
+  const qualityOffset = (safeAccuracy - 0.65) * 110;
+  const now = context.currentTime;
+  const answerDelay = 0.14;
+
+  const scheduleVoice = (frequency: number, startAt: number, amplitude: number, duration: number) => {
+    // Drop excess notes during rapid input instead of growing the audio graph without bound.
+    if (rhythmVoices.size >= MAX_RHYTHM_VOICES) return;
+
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const voice: RhythmVoice = { oscillator, gain };
+    rhythmVoices.add(voice);
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(Math.max(180, Math.min(740, frequency)), startAt);
+    oscillator.connect(gain);
+    gain.connect(output);
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, amplitude), startAt + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+
+    oscillator.onended = () => {
+      rhythmVoices.delete(voice);
+      oscillator.disconnect();
+      gain.disconnect();
+    };
+    oscillator.start(startAt);
+    oscillator.stop(startAt + duration + 0.025);
+  };
+
+  scheduleVoice(baseFrequency + qualityOffset, now, 0.11, 0.19);
+  if (safeStreak > 0 && safeAccuracy >= 0.5) {
+    scheduleVoice(baseFrequency * (safeAccuracy >= 0.85 ? 1.5 : 1.25), now + answerDelay, 0.045, 0.16);
+  }
 }

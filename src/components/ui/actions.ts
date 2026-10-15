@@ -4,21 +4,35 @@
  * Also the right panel's navigation (Parameters | Evolution, stage choice, follow mode).
  */
 import { STAGES, type ArchiveIndex, type Specimen, type StageId } from "@/lib/chain/types";
-import { evolveSpecimen, growSpecimen, loadSpecimen } from "@/lib/chain/controller";
+import { canContinuePartial, evolveSpecimen, growSpecimen, hasResumableRemoteJob, isChainHalted, loadSpecimen, resumeSpecimen } from "@/lib/chain/controller";
 import { unlockAudioContext } from "@/lib/audio/player";
+import { getRunApiKey } from "@/lib/moth/sessionKey";
 import { useChrono } from "@/lib/store";
 import { captureOrganismBlob, captureOrganismPng } from "./deps";
 import { isActive } from "./format";
 import { useUi } from "./uiStore";
 
+export { canContinuePartial };
+
 let abort: AbortController | null = null;
 
 export const isBusy = () => useUi.getState().running !== null || useChrono.getState().mode !== "idle";
 
-/** Evolve needs what genesis → morphogenesis produced; anything less (none, or a stopped Create) means Create. */
+/** Evolve needs what genesis → morphogenesis produced; failed partials are handled by Retry first. */
 export const canEvolve = (s: Specimen | null = useChrono.getState().specimen) => !!(s?.genome && s.colony && s.skin);
 
 const isAbort = (e: unknown) => e instanceof DOMException && e.name === "AbortError";
+
+function credentialReady(): boolean {
+  try {
+    getRunApiKey();
+    return true;
+  } catch (e) {
+    openParameters();
+    useUi.getState().toast({ kind: "info", title: "Check your Moth key", detail: e instanceof Error ? e.message : undefined });
+    return false;
+  }
+}
 
 function failedStageTitle(e: unknown): string | null {
   const fromError = e && typeof e === "object" && "stage" in e ? (e as { stage: StageId }).stage : null;
@@ -32,6 +46,7 @@ function settleActiveRuns() {
   const st = useChrono.getState();
   for (const s of STAGES) {
     const r = st.runs[s.id];
+    if (hasResumableRemoteJob(st.specimen) && r?.jobId && r.errorType) continue;
     if (isActive(r?.status) || (r?.status === "failed" && r.error === "aborted")) st.setRun(s.id, { status: "idle", error: undefined });
   }
   if (st.mode !== "idle") st.setMode("idle", null);
@@ -48,17 +63,41 @@ async function exclusive(kind: "grow" | "evolve", body: (signal: AbortSignal) =>
   } catch (e) {
     if (isAbort(e) || abort?.signal.aborted) {
       settleActiveRuns();
-      ui.toast({ kind: "info", title: "Stopped" });
+      const resumable = hasResumableRemoteJob(useChrono.getState().specimen);
+      ui.toast({
+        kind: "info",
+        title: resumable ? "Stopped locally · Atlas may still be processing" : "Stopped",
+        action: resumable ? { label: "Resume", run: resume } : undefined,
+      });
+    } else if (e instanceof Error && e.name === "MothCredentialMismatch") {
+      openParameters();
+      ui.toast({ kind: "info", title: "Use this run’s original key", detail: e.message });
     } else {
       const stage = failedStageTitle(e);
       const st = useChrono.getState();
       if (st.mode !== "idle") st.setMode("idle", null);
       st.pushLog({ level: "error", msg: e instanceof Error ? e.message : String(e) });
+      const remotePending = isChainHalted(e) && hasResumableRemoteJob(st.specimen);
+      const partialCanContinue = !remotePending && canContinuePartial(st.specimen);
+      const failedRun = stage ? st.runs[STAGES.find((s) => s.title === stage)?.id ?? "genesis"] : undefined;
+      const morphogenesisTimedOut = stage === "Morphogenesis" && failedRun?.errorType === "engine_timeout";
       ui.toast({
         kind: "error",
-        title: stage ? `Dormant · ${stage} link broke` : "Dormant · chain halted",
-        detail: e instanceof Error ? e.message : undefined,
-        action: { label: "Retry", run: retry },
+        title: remotePending
+          ? `${stage ?? "Atlas"} awaiting Atlas`
+          : morphogenesisTimedOut
+            ? "Morphogenesis timed out on Moth"
+            : stage ? `Dormant · ${stage} link broke` : "Dormant · chain halted",
+        detail: remotePending
+          ? "Atlas has not reported a final result. Resume reconnects to the same job; it does not submit another one."
+          : morphogenesisTimedOut
+            ? "Retry submits Morphogenesis again; your genome and colony are preserved."
+            : e instanceof Error ? e.message : undefined,
+        action: remotePending
+          ? { label: "Resume", run: resume }
+          : partialCanContinue
+            ? { label: `Retry ${stage ?? "stage"}`, run: continuePartial }
+            : { label: "Retry", run: retry },
       });
     }
   } finally {
@@ -69,7 +108,7 @@ async function exclusive(kind: "grow" | "evolve", body: (signal: AbortSignal) =>
 
 /** Create: grow a brand-new specimen from genesis with the current controls. */
 export function create() {
-  if (isBusy()) return;
+  if (isBusy() || !credentialReady()) return;
   // Start/resume Web Audio in this click's gesture and leave the user's audio preference enabled.
   unlockAudioContext();
   const st = useChrono.getState();
@@ -79,6 +118,7 @@ export function create() {
 }
 
 export function evolve() {
+  if (isBusy() || !credentialReady()) return;
   const { specimen, pendingWounds, controls } = useChrono.getState();
   if (!specimen || !canEvolve(specimen)) return;
   const wounds = pendingWounds.slice();
@@ -90,10 +130,31 @@ export function evolve() {
   );
 }
 
-/** The one primary action: Create until there is a specimen to build on, Evolve afterwards. */
+/** Reconnect to the pending Atlas job retained on an in-memory partial specimen. */
+export function resume() {
+  const specimen = useChrono.getState().specimen;
+  if (!specimen || !hasResumableRemoteJob(specimen) || isBusy() || !credentialReady()) return;
+  const kind = specimen.generation > 0 ? "evolve" : "grow";
+  void exclusive(kind, (signal) => resumeSpecimen(specimen, signal), resume);
+}
+
+/** Retry the first failed stage on the existing partial specimen, preserving completed work. */
+export function continuePartial() {
+  const specimen = useChrono.getState().specimen;
+  if (!specimen || !canContinuePartial(specimen) || isBusy() || !credentialReady()) return;
+  const kind = specimen.generation > 0 ? "evolve" : "grow";
+  void exclusive(kind, (signal) => resumeSpecimen(specimen, signal), continuePartial);
+}
+
+/** Used by the primary-action panel to expose a retained remote job before the user clicks Retry. */
+export const canResume = (s: Specimen | null = useChrono.getState().specimen) => hasResumableRemoteJob(s);
+
+/** Continue retained work first; otherwise Create a specimen or Evolve its completed skin. */
 export function primary() {
   if (isBusy()) return;
-  if (canEvolve()) evolve();
+  if (canResume()) resume();
+  else if (canContinuePartial()) continuePartial();
+  else if (canEvolve()) evolve();
   else create();
 }
 

@@ -13,8 +13,8 @@ import { useShallow } from "zustand/react/shallow";
 import { PARAM_COPY } from "@/lib/chain/stageCopy";
 import { STAGES, type Controls } from "@/lib/chain/types";
 import { useChrono } from "@/lib/store";
-import { canEvolve, newSpecimen, primary, stop } from "./actions";
-import { MAX_ATTEMPTS, isActive, isComplete } from "./format";
+import { canContinuePartial, canEvolve, canResume, newSpecimen, primary, stop } from "./actions";
+import { attemptLimit, isActive, isComplete } from "./format";
 import { ICON, Spinner, T, T_FAST, cx } from "./primitives";
 import { useUi } from "./uiStore";
 
@@ -212,7 +212,7 @@ export function ControlInput({
 /* ---------------------------------------------------------------- run progress */
 
 export function useRunProgress() {
-  const { runs, mode, activeStage, pendingWounds, hasSpecimen, evolvable } = useChrono(
+  const { runs, mode, activeStage, pendingWounds, hasSpecimen, evolvable, resumable, continuable } = useChrono(
     useShallow((s) => ({
       runs: s.runs,
       mode: s.mode,
@@ -220,6 +220,8 @@ export function useRunProgress() {
       pendingWounds: s.pendingWounds.length,
       hasSpecimen: !!s.specimen,
       evolvable: canEvolve(s.specimen),
+      resumable: canResume(s.specimen),
+      continuable: canContinuePartial(s.specimen),
     })),
   );
   const running = useUi((s) => s.running);
@@ -229,6 +231,7 @@ export function useRunProgress() {
   const done = scope.filter((s) => isComplete(runs[s.id]?.status)).length;
   const current = STAGES.find((s) => s.id === activeStage) ?? STAGES.find((s) => isActive(runs[s.id]?.status));
   const currentRun = current ? runs[current.id] : undefined;
+  const failedStage = STAGES.find((s) => runs[s.id]?.status === "failed");
   return {
     busy,
     loading: running === "load",
@@ -236,11 +239,14 @@ export function useRunProgress() {
     done,
     total: scope.length,
     current,
-    retry: currentRun?.status === "retrying" ? `${currentRun.attempt}/${MAX_ATTEMPTS}` : null,
+    retry: currentRun?.status === "retrying" ? `${currentRun.attempt}/${attemptLimit(currentRun)}` : null,
     wounds: pendingWounds,
     hasSpecimen,
     /** Primary reads Evolve (else Create). */
     canEvolve: evolvable,
+    canResume: resumable,
+    canContinue: continuable,
+    failedStage,
   };
 }
 
@@ -254,8 +260,8 @@ export function ChainActions({ layout = "stack" }: { layout?: "stack" | "row" })
   const p = useRunProgress();
   const running = p.busy && !p.loading;
   const pct = p.total ? (p.done / p.total) * 100 : 0;
-  const label = p.canEvolve ? "Evolve" : "Create";
-  const badge = p.canEvolve ? p.wounds : 0;
+  const label = p.canResume ? "Resume" : p.canContinue ? `Retry ${p.failedStage?.title ?? "stage"}` : p.canEvolve ? "Evolve" : "Create";
+  const badge = !p.canResume && p.canEvolve ? p.wounds : 0;
 
   return (
     <div className={cx("flex gap-2", layout === "stack" ? "flex-col" : "flex-row items-stretch")}>

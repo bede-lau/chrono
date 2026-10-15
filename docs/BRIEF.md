@@ -19,7 +19,8 @@ differs from the PRD's assumptions: Tessa is image→image capped at 64×64; the
 BSDF LUTs, not geometry; audio engines take audio files).
 
 **UI/UX quality is the #1 priority.** Apple-grade restraint: black stage, the organism is the only colour,
-hairline UI, no clutter, no explanatory filler text, every interaction has immediate feedback, 60 fps.
+hairline UI, no clutter, no explanatory filler text, every interaction has immediate feedback. Render scheduling
+targets 30 frames/s with a specimen and 15 frames/s in the blank state; device performance varies.
 
 ## 2. The daisy chain (8 engines, strictly coupled)
 
@@ -42,10 +43,14 @@ e.g. `"absorption 0.71 ← tissue entropy 5.68 bits"` — Evolution run details 
 - Decoherence: `strength = 0.25 + 0.6·decay`, `reach = 0.8·entanglement`, `style = rx` (ry collapses gradients),
   mask = spherical great-circle wound Gaussians painted at UV, with `v = 1` at the north pole/top image row (`row = (1-v)·height`); baseline 0.15 keeps the body aging while wounds remain visibly stronger.
 - Soma: `values = lumaGrid(tissue, 32)`, `strength = 0.3 + 0.5·entanglement`, `reach = entanglement`, `style "xy"`.
-- Membrane: `reflectance = clamp(0.08 + 0.6·meanLuma, .05, .9)`, `absorption = clamp(entropy/8, .1, .98)`,
-  `layers = 1 + round(3·normVariance)` (1–4), `incoming_rays = max(layers, min(layers + 4 + genome[5] % 4, 4))` (respect 21-qubit budget),
-  `interaction = clamp(2·hueSkew, -2, 2)` (sign → distinct pattern), `style` by entropy bucket
-  (<3 `3-body`, <5 `peaked`, <6.5 `frustrated`, else `constrained`), `resolution 24`.
+- Membrane (`src/lib/chain/membraneParams.ts`): reflectance is `.08 + .72·meanLuma + .3·(genome[4]/255 − .5)` then clamps to
+  `.05.. .9`; absorption is `.1 + .56·(entropy/8)^.8 + .26·genome[3]/255`, clamped to `.1.. .98` to avoid
+  high-entropy saturation. Layers are `1 + round(3·clamp(.65·clamp(2σ,0,1) + .35·genome[1]/255,0,1))` (1–4).
+  `incoming_rays = layers + genome[5] % (5-layers)` stays between layers and 4. Interaction is
+  `sign(signal || genomeSignal || 1)·entanglement·(1.6 + 2.4·abs(signal))`, where `signal = .7·hueSkew + .3·genomeSignal`
+  and `genomeSignal = 2·genome[2]/255 − 1`; it clamps to −2..2. Style rotates the four entropy buckets by `genome[0] % 4`, so each
+  bucket can select all four styles. LUT resolution is 24. These are bounded local derivations; no Atlas latency
+  guarantee follows from them.
 
 **Interactive latency tuning (2026-10-01):** the chain now sends 256 Tessa shots per field (one quarter of the former
 1,024) and caps Membrane incoming rays at 4 while preserving the 1–4 Soma-derived layers. Its LUT is 24×24 instead
@@ -62,6 +67,10 @@ Evolve (user touched the organism): re-run stages 3→7 re-using 0–2 (status `
 skipped for fast evolves (`withAudio:false`) — they then stay `cached`.
 PRD rule kept: **breaking any link halts the lifecycle** — a failed stage stops downstream stages; the organism
 goes "dormant" and the UI offers Retry.
+
+Echo recovery work currently gives `retrocausal-echo-v1` a 20-minute initial client polling budget. A local timeout or
+poll/result/output outage records a recoverable error marker and preserves the known Atlas job id; explicit resume
+continues that same job instead of submitting a duplicate. Integration and browser verification pass.
 
 ## 3. Verified Moth Atlas API facts (spiked 2026-09-26)
 
@@ -114,6 +123,17 @@ mid-edit; only fix errors in files you own).
 - Evolution presents the stage header, artifact preview, a plain-English “What it does” explanation, “On the organism” explanation, engine-specific controls, then collapsible run details (coupling note, params, job id, latency and attempts). Before Create it remains useful as documentation; artifacts show “Waiting for Create.”
 - The **Chrono Lens** isolates an engine’s contribution on the same organism: scrub Without ↔ With, compare hemispheres, or show a diagnostic overlay. Opening an Evolution stage selects its lens; Parameters turns the lens off. Lens overlays and reveal pulses make Decoherence scars, Soma displacement and Membrane angle bands legible on the blob. A linked probe connects blob hover to artifact previews and back.
 - Controls preview on the organism immediately; changed values are marked pending until Evolve. A completed, non-cached stage may briefly reveal its contribution unless the user is dragging.
+- A no-wound **Pulse specimen** action stimulates the membrane; touch/click records a wound. Linked probes carry a
+  selected position between the organism and its artifact preview.
+- Rendering budget: 30 frames/s with a specimen, 15 frames/s for the blank embryo, device pixel ratio capped at 1.5,
+  160×100 sphere segments, and rendering paused while the document is hidden. These are scheduling targets, not a
+  measured frame-rate guarantee on every device.
+- The Parameters panel accepts a visitor's Moth API key. **Check key** authenticates against Atlas `/me` without
+  running an engine, then shows Accepted or Rejected. An unchecked or edited key blocks Create/Evolve until checked.
+  The key stays in browser memory, survives panel switching, and is sent only to the same-origin proxy; it is never
+  persisted in storage, cookies, logs, or specimens. Clearing it restores the server-configured app key. Each chain
+  captures its credential, and a pending job can resume only with the original credential. Cached skin pixels are
+  re-uploaded when evolving across credential scopes so Atlas assets remain account-owned.
 
 Design language: near-black stage (`#050506`) with a soft radial vignette; the organism is the only saturated
 colour. UI is monochrome: white at 90/60/40/12/6 % alpha, hairline 1px borders `white/8%`, 10–12 px uppercase

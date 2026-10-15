@@ -135,6 +135,9 @@ uniform float uFormAmp;
 uniform float uBreath;
 uniform float uBreathPhase;
 uniform float uShiver;
+uniform vec4 uGesture;           // direction + signed pressure/tug amplitude
+uniform float uGesturePair;      // opposite patch responds inversely
+uniform float uRhythm;           // bounded transient beat swell
 uniform vec2 uLGen;               // lens amounts (without-side, with-side)
 uniform vec2 uLCol;
 uniform vec2 uLSom;
@@ -151,9 +154,11 @@ float fieldAt(sampler2D tex, vec2 pole, vec3 d) {
 // Travelling ring wave from a wound centre c (and, entangled, from its antipode).
 float rippleAt(float ang, float age) {
   float x = ang - age * 0.85;
-  float env = exp(-x * x * 22.0) * exp(-age * 0.95);
-  float wave = cos(x * 20.0) * env * 0.032;
-  float poke = -exp(-ang * ang * 70.0) * exp(-age * 3.2) * 0.055;
+  float env = exp(-x * x * 24.0) * exp(-age * 0.74);
+  float wave = cos(x * 22.0) * env * 0.052;
+  // A decisive, local indentation makes the first frame of a touch legible.
+  // surface.ts mirrors this exactly for the raycast proxy.
+  float poke = -exp(-ang * ang * 86.0) * exp(-age * 2.35) * 0.092;
   return wave + poke;
 }
 
@@ -194,6 +199,9 @@ float displacement(vec3 d, float side, out float field) {
 #endif
   // 07 breathing (audio-scaled), a travelling swell rather than a uniform pump
   disp += voi * uBreath * (0.65 * sin(uBreathPhase - d.y * 1.4) + 0.35 * snoise(d * 1.6 + vec3(uBreathPhase * 0.15)));
+  float contact = dot(d, uGesture.xyz);
+  disp += uGesture.w * (exp((contact - 1.0) * 13.0) - uGesturePair * exp((-contact - 1.0) * 13.0));
+  disp += uRhythm * (0.7 + 0.3 * cos(d.y * 5.0));
   return disp;
 }
 
@@ -281,6 +289,13 @@ uniform float uTScale;
 uniform float uIrid;
 uniform float uThickness;       // nm (engine default 500)
 uniform float uThickVar;
+uniform float uMembraneContrast;
+uniform float uMembraneFlow;
+uniform float uMembranePulse;
+uniform vec3 uLightProbe; // xy = camera-relative light, z = enabled
+uniform vec4 uGesture;
+uniform float uGesturePair;
+uniform float uRhythm;
 uniform float uSomaOn;
 uniform float uEmbryo;
 uniform float uBeat;
@@ -479,7 +494,10 @@ void main() {
     float antiAng = PI - ang;
     float flash = exp(-age * 2.6);
     glow += s * (exp(-ang * ang * 110.0) + uEntangle * 0.55 * exp(-antiAng * antiAng * 110.0)) * flash;
-    scar += s * exp(-ang * ang * 60.0) * smoothstep(0.1, 0.9, age) * exp(-age / uDecayTau);
+    // The mark remains while the wound is queued for Evolve. It starts wet and
+    // bright, then settles into a quiet but still visible pending scar.
+    float settled = smoothstep(0.1, 0.9, age);
+    scar += s * exp(-ang * ang * 60.0) * settled * (0.3 + 0.7 * exp(-age / uDecayTau));
     float front = age * 0.85;
     float fade = exp(-age * 1.05);
     float r0 = (ang - front) * 15.0;
@@ -492,7 +510,7 @@ void main() {
 
   // ---- studio lighting (camera-relative): key upper-left, cool fill, rim from behind
   float NdV = clamp(dot(N, V), 0.0, 1.0);
-  vec3 Lk = normalize(vec3(-0.55, 0.62, 0.56));
+  vec3 Lk = normalize(mix(vec3(-0.55, 0.62, 0.56), vec3(uLightProbe.xy * 1.7, 0.65), uLightProbe.z));
   vec3 Lr = normalize(vec3(0.72, 0.38, -0.58));
   vec3 Lf = normalize(vec3(0.7, -0.3, 0.45));
   vec3 keyC = vec3(1.0, 0.96, 0.92) * 1.7;
@@ -516,16 +534,24 @@ void main() {
   // θ uses the geometric normal so the linked probe (surface.ts) reports exactly what is painted here.
   float cosTheta = clamp(abs(dot(Ng, V)), 0.0, 1.0);
   float theta = acos(cosTheta);
-  float thickness = uThickness * (1.0 + uThickVar * (0.6 * snoise(d * 1.6 + uSeed.yzx + uTime * 0.02) + 0.4 * vField * uSomaOn));
+  float membraneNoise = 0.6 * snoise(d * 1.6 + uSeed.yzx + uTime * 0.02) + 0.4 * vField * uSomaOn;
+  float thickness = uThickness * (1.0 + uThickVar * membraneNoise + uMembranePulse * 0.08);
   float D = -2.0 * TWO_PI * thickness * cosTheta;
   const vec3 wavelength = vec3(650.0, 530.0, 470.0);
   vec3 sPh = mod(D / wavelength, TWO_PI) / TWO_PI;
   float t = theta / HALF_PI;
-  vec3 Rf = vec3(texture(uRLut, vec2(sPh.r, t)).r, texture(uRLut, vec2(sPh.g, t)).r, texture(uRLut, vec2(sPh.b, t)).r) * uRScale;
-  vec3 Tf = vec3(texture(uTLut, vec2(sPh.r, t)).r, texture(uTLut, vec2(sPh.g, t)).r, texture(uTLut, vec2(sPh.b, t)).r) * uTScale;
+  // Read the engine's LUT at a locally shifted phase. This is still entirely
+  // R/T data, but lets an expressive LUT travel across the living surface.
+  float phaseFlow = uMembraneFlow * (0.72 * snoise(d * 4.1 + uSeed.zxy + uTime * 0.055) + 0.28 * sin(uTime * 0.8 + d.y * 8.0));
+  vec3 lutPhase = fract(sPh + vec3(phaseFlow, phaseFlow * 1.37, phaseFlow * 1.83));
+  // Keep the LUT's row at the physical incidence angle reported by the linked
+  // probe; phase flow alone supplies the living variation across the columns.
+  float lutAngle = t;
+  vec3 Rf = vec3(texture(uRLut, vec2(lutPhase.r, lutAngle)).r, texture(uRLut, vec2(lutPhase.g, lutAngle)).r, texture(uRLut, vec2(lutPhase.b, lutAngle)).r) * uRScale;
+  vec3 Tf = vec3(texture(uTLut, vec2(lutPhase.r, lutAngle)).r, texture(uTLut, vec2(lutPhase.g, lutAngle)).r, texture(uTLut, vec2(lutPhase.b, lutAngle)).r) * uTScale;
   float rl = dot(Rf, vec3(0.3333));
   // interference colour: the LUT's channel differences carry the hue — boost them so the shift reads at a glance
-  vec3 film = max(vec3(rl) + (Rf - rl) * 3.2, 0.0);
+  vec3 film = max(vec3(rl) + (Rf - rl) * (2.8 + 1.7 * uMembraneContrast), 0.0);
   float irid = uIrid * aMem;
 
   // transmittance tints the tissue beneath the film
@@ -548,6 +574,14 @@ void main() {
   col += specTint * env * (0.03 + 0.55 * F) * cavity * gloss;
   // the film itself: visible face-on, strongest towards grazing angles -> colours slide as the organism turns
   col += film * irid * (0.075 + 0.62 * F + 0.25 * (1.0 - cosTheta)) * (0.45 + env);
+  // Probe pulses reveal the existing R/T film in one unmistakable flash. The
+  // colour remains sampled from the generated membrane, never a decorative tint.
+  col += film * irid * (uMembranePulse * 0.38 + uRhythm * 3.0);
+  // A subtle contact ring identifies the held patch and its coupled partner.
+  float contactAngle = acos(clamp(dot(d, uGesture.xyz), -1.0, 1.0));
+  float contactRing = exp(-pow((contactAngle - 0.24) * 28.0, 2.0));
+  float pairedRing = exp(-pow((PI - contactAngle - 0.24) * 28.0, 2.0));
+  col += (vec3(0.35, 0.85, 1.0) * contactRing + vec3(1.0, 0.63, 0.3) * pairedRing * uGesturePair) * min(abs(uGesture.w) * 5.0, 0.65);
   float rim = pow(1.0 - NdV, 3.0);
   col += rim * mix(uHue * 0.8 + 0.06, film * 0.85, irid) * 0.32;
 
@@ -563,8 +597,8 @@ void main() {
 
   // ---- emissive: pending wounds
   vec3 hot = mix(vec3(1.0, 0.93, 0.86), uHue + 0.4, 0.25);
-  col += hot * glow * 3.2;
-  col += mix(uHue * 1.3 + 0.18, film * 1.2, irid * 0.5) * ring * 0.85;
+  col += hot * glow * 4.6;
+  col += mix(uHue * 1.5 + 0.22, film * 1.35, irid * 0.62) * ring * 1.3;
 
   // ================================================================ Chrono Lens overlays (on the "with" half)
   // 02 colony: nuclei markers + the cell walls between them (spherical Voronoi of the graph-v1 nuclei)

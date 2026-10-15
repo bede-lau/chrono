@@ -51,13 +51,17 @@ export interface StageRun {
   id: StageId;
   status: StageStatus;
   attempt: number; // 1-based; >1 means retried
+  maxAttempts?: number; // actual stage retry budget; older specimens use the generic default
   jobId?: string; // Moth job id (the proof it ran on Atlas)
   startedAt?: number; // epoch ms
   finishedAt?: number; // epoch ms
   latencyMs?: number; // wall-clock submit->completed
   params?: Record<string, unknown>; // exact params sent to the engine
   inputs?: Record<string, string>; // input slot -> asset id actually sent
+  inputImage?: ImageArtifact; // exact image consumed when an engine uses a reduced-resolution seed
   error?: string;
+  /** Structured transport error, e.g. client_timeout means Atlas may still be processing this job. */
+  errorType?: string;
   note?: string; // one-line human explanation of the coupling for this run
 }
 
@@ -205,9 +209,32 @@ export const LENS_OFF: LensState = { stage: null, amount: 1, compare: false, ove
 export interface Probe {
   u: number; // 0..1 longitude
   v: number; // 0..1 latitude, 1 = north pole (same convention as Wound)
-  source: "blob" | "panel"; // who set it
-  /** blob-sourced only: incidence angle at that point, 0..PI/2 (LUT row axis) */
+  source: "blob" | "panel" | "inspect"; // blob/panel are hover probes; inspect is a pinned specimen point
+  /** 3D-surface picks only: incidence angle at that point, 0..PI/2 (LUT row axis) */
   theta?: number;
-  /** blob-sourced only: LUT phase coordinate s for R,G,B in [0,1) (LUT column axis) */
+  /** 3D-surface picks only: LUT phase coordinate s for R,G,B in [0,1) (LUT column axis) */
   phase?: [number, number, number];
 }
+
+export type SpecimenInteractionMode = "touch" | "inspect" | "pressure" | "tug" | "rhythm" | "light";
+
+/** Local, reversible experiments. Never persisted in a specimen or sent to Moth. */
+export interface SurfaceGesture {
+  /** Keyboard/demo controls ask the renderer to choose the currently visible centre. */
+  fromControl?: boolean;
+  kind: "pressure" | "tug";
+  u: number;
+  v: number;
+  dx: number;
+  dy: number;
+  heldAt: number;
+  active: boolean;
+}
+export interface RhythmState {
+  at: number;
+  taps: number;
+  streak: number;
+  accuracy: number | null;
+  bpm: number;
+}
+export interface LightProbe { x: number; y: number }

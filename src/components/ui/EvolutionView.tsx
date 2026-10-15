@@ -43,7 +43,7 @@ import {
   gutter,
   useCompact,
 } from "./evolutionPrimitives";
-import { MAX_ATTEMPTS, formatLatency, formatParam, isActive, isComplete, pad2 } from "./format";
+import { attemptLimit, formatLatency, formatParam, isActive, isComplete, isRecoverableRun, pad2 } from "./format";
 import { T_FAST, cx } from "./primitives";
 
 export interface EvolutionViewProps {
@@ -300,6 +300,7 @@ function RunDetails({ stage }: { stage: StageId }) {
   const params = run?.params ? Object.entries(run.params) : [];
   const inputs = run?.inputs ? Object.entries(run.inputs) : [];
   const hasJob = !!run && (!!run.jobId || run.latencyMs != null || run.attempt > 0);
+  const hasRunDetails = hasJob || !!run?.error;
 
   return (
     <Disclosure label="Run details" open={open} onToggle={toggle}>
@@ -331,7 +332,7 @@ function RunDetails({ stage }: { stage: StageId }) {
             </dl>
           </SubBlock>
         )}
-        {hasJob && (
+        {hasRunDetails && (
           <SubBlock label="Job">
             <dl className="flex flex-col">
               {run.jobId && (
@@ -341,8 +342,13 @@ function RunDetails({ stage }: { stage: StageId }) {
               )}
               <Row k="latency">{formatLatency(run.latencyMs)}</Row>
               <Row k="attempts">
-                {Math.max(1, run.attempt)}/{MAX_ATTEMPTS}
+                {Math.max(1, run.attempt)}/{attemptLimit(run)}
               </Row>
+              {run.error && (
+                <Row k="error">
+                  <CopyValue value={run.error} label="Copy error" />
+                </Row>
+              )}
               {inputs.map(([slot, id]) => (
                 <Row key={slot} k={`in:${slot}`}>
                   <CopyValue value={id} label="Copy asset id" />
@@ -387,7 +393,13 @@ export function EvolutionView({ stage, compact = false, following = false, onPin
           }
         >
           {status === "failed" && run?.error && (
-            <p className="mb-3 rounded-[8px] bg-danger-soft px-3 py-2 font-mono text-[11px] leading-[1.5] break-words text-danger">{run.error}</p>
+            <p className={cx("mb-3 rounded-[8px] px-3 py-2 text-[11px] leading-[1.5] break-words", isRecoverableRun(run) ? "bg-white/[0.05] text-fg-2" : "bg-danger-soft font-mono text-danger")}>
+              {isRecoverableRun(run)
+                ? "Your Atlas job is retained. Resume reconnects to it without submitting another job."
+                : stage === "morphogenesis" && run.errorType === "engine_timeout"
+                  ? "Moth’s Tessa engine did not respond. Your genome and colony are preserved. Retry submits Morphogenesis again; all eight engines are still required."
+                  : run.error}
+            </p>
           )}
           <div className={cx("transition-opacity duration-300", active && has && "opacity-40")}>
             <ArtifactPreview

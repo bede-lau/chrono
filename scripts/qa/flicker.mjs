@@ -20,11 +20,11 @@ try {
   await page.getByRole("button", { name: "Create", exact: true }).waitFor();
   await page.waitForFunction(() => document.querySelector("canvas")?.width > 0);
   await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });
-  const renderer = await page.evaluate(() => {
-    const gl = document.querySelector("canvas").getContext("webgl2");
-    const ext = gl.getExtension("WEBGL_debug_renderer_info");
-    return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : "unknown";
-  });
+  // Do not request the canvas context a second time. On WebKit/Apple GPU that
+  // makes subsequent drawImage() reads transparent even while the compositor is
+  // still rendering the organism, turning this temporal regression into a false
+  // black-frame report. Browser identity is enough to label the test backend.
+  const renderer = await page.evaluate(() => navigator.userAgent);
   // Optional A/B control for the diagnosed fault; only mutates this isolated dev browser.
   if (baseline === "--baseline") {
     await page.waitForFunction(() => !!window.__organismRig, null, { timeout: 10000 });

@@ -3,6 +3,8 @@ import { useEffect, useRef } from "react";
 
 export interface ShortcutHandlers {
   primary: () => void; // Space: Create / Evolve
+  /** Rhythm mode may reserve Space for a beat. Return true only when it consumed the key. */
+  rhythm?: () => boolean;
   newSpecimen: () => void; // N
   toggleMute: () => void; // M
   inspect: (index: number) => void; // 1–8 → 0..7
@@ -28,7 +30,11 @@ function isTextEntry(el: Element | null): boolean {
  * (`:focus-visible` can't tell: Chrome turns it on for the focused element as soon as any key is pressed.)
  */
 function ownsSpace(el: Element | null, pointerFocused: Element | null): boolean {
-  if (!el || el === document.body || el === pointerFocused) return false;
+  if (!el || el === document.body) return false;
+  // These compact controls remain keyboard-owned after a pointer click. Otherwise a Space press can accidentally
+  // start a paid Create/Evolve run while somebody is adjusting an interaction.
+  if (el.closest("[data-interaction-controls]")) return true;
+  if (el === pointerFocused) return false;
   return !!el.closest("button, a[href], summary, [role='button'], [role='tab'], [role='radio'], [role='switch'], [role='checkbox']");
 }
 
@@ -73,7 +79,7 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       if (e.code === "Space" || e.key === " ") {
         if (ownsSpace(target, pointerFocused)) return;
         e.preventDefault();
-        if (!e.repeat) h.primary();
+        if (!e.repeat && !h.rhythm?.()) h.primary();
         return;
       }
       if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && h.step && !ownsArrows(target)) {

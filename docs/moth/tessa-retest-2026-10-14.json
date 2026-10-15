@@ -1,0 +1,153 @@
+{
+  "checkedAt": "2026-10-14T17:10:57.101Z",
+  "engine": "tessa-image-v1",
+  "advertisedRunPolicy": {
+    "timeout": 18000,
+    "max_retries": 1,
+    "heartbeat": 6000
+  },
+  "totalTessaSubmissions": 3,
+  "runs": [
+    {
+      "label": "palette-floor-2-1",
+      "specimenId": "6a5efd",
+      "startedAt": "2026-10-14T17:05:35.602Z",
+      "dimensions": [
+        2,
+        2
+      ],
+      "inputSha256": "14baa0e9713fd9ed6b943a9bb5df763c306f2824d47bb02b5e54bf15fc083674",
+      "asset": "7182d283-aec2-4e07-bcd9-13265503c0b3",
+      "params": {
+        "machine": "aer",
+        "shots": 1,
+        "fixed_palette": true,
+        "separate_rgb": true,
+        "distortion": 0,
+        "range_correction": false
+      },
+      "jobId": "b2c5cce3-eaaa-4813-901b-41027a0ef086",
+      "submissions": 1,
+      "elapsedMs": 63094,
+      "outcome": "failed",
+      "remoteStatus": "failed",
+      "httpStatus": 200,
+      "errorType": "engine_timeout",
+      "message": "tessa-image-v1: engine_timeout: The engine did not respond in time — retry the job",
+      "pending": false,
+      "expectedRejection": false,
+      "transport": "direct"
+    },
+    {
+      "label": "simulator-distortion-control",
+      "specimenId": "6a5efd",
+      "startedAt": "2026-10-14T17:07:02.384Z",
+      "dimensions": [
+        2,
+        2
+      ],
+      "inputSha256": "14baa0e9713fd9ed6b943a9bb5df763c306f2824d47bb02b5e54bf15fc083674",
+      "asset": "cadebc79-493d-469b-b972-5b23940244c5",
+      "params": {
+        "machine": "aer",
+        "shots": 64,
+        "fixed_palette": true,
+        "separate_rgb": true,
+        "distortion": 1,
+        "range_correction": false
+      },
+      "jobId": "4bfcc589-8a04-4fa2-b863-3bfcba707cb4",
+      "submissions": 1,
+      "elapsedMs": 63063,
+      "outcome": "failed",
+      "remoteStatus": "failed",
+      "httpStatus": 200,
+      "errorType": "engine_timeout",
+      "message": "tessa-image-v1: engine_timeout: The engine did not respond in time — retry the job",
+      "pending": false,
+      "expectedError": "distortion_without_hardware",
+      "expectedRejection": false,
+      "transport": "direct"
+    },
+    {
+      "label": "standard-16-128",
+      "specimenId": "6a5efd",
+      "startedAt": "2026-10-14T17:08:46.675Z",
+      "dimensions": [
+        16,
+        16
+      ],
+      "inputSha256": "630de241edd2188b753c2b898c7dd7f05157bd3e1e4c6473940f3560893dc2a3",
+      "asset": "76fbd052-a667-4a67-8db5-e9c1f6f6000f",
+      "params": {
+        "machine": "aer",
+        "shots": 128,
+        "fixed_palette": false,
+        "separate_rgb": true,
+        "distortion": 0,
+        "range_correction": false
+      },
+      "jobId": "a540dcde-5050-45cf-b972-3a9222932094",
+      "submissions": 1,
+      "elapsedMs": 63153,
+      "outcome": "failed",
+      "remoteStatus": "failed",
+      "httpStatus": 200,
+      "errorType": "engine_timeout",
+      "message": "tessa-image-v1: engine_timeout: The engine did not respond in time — retry the job",
+      "pending": false,
+      "expectedRejection": false,
+      "transport": "local-proxy"
+    }
+  ],
+  "rawStatuses": [
+    {
+      "jobId": "b2c5cce3-eaaa-4813-901b-41027a0ef086",
+      "httpStatus": 200,
+      "status": "failed",
+      "error": {
+        "message": "The engine did not respond in time — retry the job",
+        "retryable": true,
+        "type": "engine_timeout"
+      },
+      "submittedAt": "2026-10-14T17:05:40Z",
+      "updatedAt": "2026-10-14T17:06:42Z"
+    },
+    {
+      "jobId": "4bfcc589-8a04-4fa2-b863-3bfcba707cb4",
+      "httpStatus": 200,
+      "status": "failed",
+      "error": {
+        "message": "The engine did not respond in time — retry the job",
+        "retryable": true,
+        "type": "engine_timeout"
+      },
+      "submittedAt": "2026-10-14T17:07:06Z",
+      "updatedAt": "2026-10-14T17:08:08Z"
+    },
+    {
+      "jobId": "a540dcde-5050-45cf-b972-3a9222932094",
+      "httpStatus": 200,
+      "status": "failed",
+      "error": {
+        "message": "The engine did not respond in time — retry the job",
+        "retryable": true,
+        "type": "engine_timeout"
+      },
+      "submittedAt": "2026-10-14T17:08:50Z",
+      "updatedAt": "2026-10-14T17:09:53Z"
+    }
+  ],
+  "control": {
+    "checkedAt": "2026-10-14T17:09:50.968Z",
+    "engine": "test-engine-v1",
+    "transport": "direct",
+    "advertisedCredits": 0,
+    "submissions": 1,
+    "jobId": "66075a0d-eedc-46f0-94e9-fc9dbf5134d7",
+    "status": "completed",
+    "elapsedMs": 8486
+  },
+  "localControlNote": "An attempted free control through the app proxy was rejected locally with engine_not_allowed before any Moth job was created; the successful free control used the direct transport.",
+  "conclusion": "Tessa still fails today at ~63 seconds, including its documented simulator-rejection control. The same credentials/API complete the free control. Exact remote worker/dispatch cause remains inaccessible."
+}
