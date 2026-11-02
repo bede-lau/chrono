@@ -107,6 +107,15 @@ One later localhost Create, Specimen F2C3, is written up in [`docs/OPENAI-MORPHO
 
 The brief's all-Moth credit sketch is comet 5 + graph 5 + tessa 1 + blur 1 + blur-core 1 + entanglement shader 1 + qrc-audio 5 + echo 2 = 21, and about 10 for an evolve of stages 3–7. A browser Create no longer submits Tessa. This README does not state an OpenAI price.
 
+## ▍Project gallery
+
+<table><tr>
+<td width="50%"><img src="https://raw.githubusercontent.com/bede-lau/bede-lau.github.io/main/assets/img/chrono/chrono_1.png" alt="Chrono organism, first view" /></td>
+<td width="50%"><img src="https://raw.githubusercontent.com/bede-lau/bede-lau.github.io/main/assets/img/chrono/chrono_2.png" alt="Chrono organism, second view" /></td>
+</tr></table>
+
+<sub>Images from the [project portfolio](https://bede-lau.github.io/); they may depict an earlier build.</sub>
+
 ## ▍The demo
 
 Archive specimens render from `public/specimens/`. Picking one does not submit a job. Create and Evolve do.
