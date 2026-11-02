@@ -1,6 +1,15 @@
 <h1 align="center">Chrono</h1>
 <p align="center"><b>Grow, touch and evolve a quantum-inspired organism in the browser.</b></p>
 
+## ▍Project gallery
+
+<table><tr>
+<td width="50%"><img src="https://raw.githubusercontent.com/bede-lau/bede-lau.github.io/main/assets/img/chrono/chrono_1.png" alt="Chrono organism, first view" /></td>
+<td width="50%"><img src="https://raw.githubusercontent.com/bede-lau/bede-lau.github.io/main/assets/img/chrono/chrono_2.png" alt="Chrono organism, second view" /></td>
+</tr></table>
+
+<sub>Images from the [project portfolio](https://bede-lau.github.io/); they may depict an earlier build.</sub>
+
 ## ▍At a glance
 
 ```mermaid
