@@ -1,4 +1,22 @@
-# Chrono — Quantum Organism Browser
+<h1 align="center">Chrono</h1>
+<p align="center"><b>Grow, touch and evolve a quantum-inspired organism in the browser.</b></p>
+
+## ▍At a glance
+
+```mermaid
+flowchart LR
+ A["Comet QRNG<br/>genome"] --> B["Graph<br/>colony seed"]
+ B --> C["OpenAI image edit<br/>membrane"]
+ C --> D["Moth blur<br/>tissue"]
+ D --> E["Blur-core<br/>displacement"]
+ E --> F["Entanglement shader<br/>LUTs"]
+ F --> G["QRC audio<br/>song"]
+ G --> H["Retrocausal echo"]
+```
+
+The current chain uses seven Moth stages and one OpenAI image-edit stage; the historical competition submission used a different image provider.
+
+---
 
 A living, evolving organism in the browser, grown through a chain of **seven Moth Atlas engines and one OpenAI image-edit stage**. The OpenAI stage edits the real Colony seed; its image is uploaded to Moth and consumed by the remaining Moth stages. The original competition submission targeted **Moth Hack 2026 · Intermediate · Challenge 06 "Daisy Chain"**; the current image provider differs from that historical submission.
 
